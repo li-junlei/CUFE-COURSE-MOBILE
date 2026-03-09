@@ -9,3 +9,4 @@ pub mod config;
 pub mod date;
 pub mod background;
 pub mod update;
+pub mod widget;

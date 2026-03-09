@@ -675,6 +675,8 @@ const isSorting = ref(false); // 排序模式状态
 const showScheduleEditDialog = ref(false);
 const editingScheduleMeta = ref<ScheduleMetadata | undefined>(undefined);
 const loading = ref(false); // 加载状态
+let widgetSyncIntervalId: number | null = null;
+let widgetSyncTimeoutId: number | null = null;
 
 const courseColors = getShuffledColors();
 
@@ -728,6 +730,29 @@ const reminderTimeTables = computed<TimeTable[]>(() => {
 });
 
 const weekDays = ['周一', '周二', '周三', '周四', '周五', '周六', '周日'];
+
+async function syncWidgetData() {
+  try {
+    await invoke('save_widget_data');
+  } catch (e) {
+    console.warn('同步桌面小组件数据失败:', e);
+  }
+}
+
+function scheduleWidgetSync(delay = 300) {
+  if (widgetSyncTimeoutId !== null) {
+    window.clearTimeout(widgetSyncTimeoutId);
+  }
+  widgetSyncTimeoutId = window.setTimeout(() => {
+    syncWidgetData();
+  }, delay);
+}
+
+function handleVisibilityChange() {
+  if (document.visibilityState === 'visible') {
+    scheduleWidgetSync(0);
+  }
+}
 
 // 重新计算当前周次
 function recalculateCurrentWeek() {
@@ -1332,7 +1357,14 @@ onMounted(() => {
 
 
   // 异步初始化应用数据（不阻塞 UI）
-  initializeApp();
+  initializeApp().finally(() => {
+    scheduleWidgetSync(0);
+  });
+
+  document.addEventListener('visibilitychange', handleVisibilityChange);
+  widgetSyncIntervalId = window.setInterval(() => {
+    scheduleWidgetSync(0);
+  }, 5 * 60 * 1000);
 
   // 自动检查更新（不阻塞 UI）
   setTimeout(async () => {
@@ -1348,6 +1380,15 @@ onMounted(() => {
 
 onUnmounted(() => {
   stopSessionKeepAlive();
+  document.removeEventListener('visibilitychange', handleVisibilityChange);
+  if (widgetSyncIntervalId !== null) {
+    window.clearInterval(widgetSyncIntervalId);
+    widgetSyncIntervalId = null;
+  }
+  if (widgetSyncTimeoutId !== null) {
+    window.clearTimeout(widgetSyncTimeoutId);
+    widgetSyncTimeoutId = null;
+  }
 });
 
 watch(
@@ -1396,6 +1437,14 @@ watch(
     );
   },
   { immediate: true, deep: true }
+);
+
+watch(
+  [courses, currentScheduleId, currentWeek],
+  () => {
+    scheduleWidgetSync(300);
+  },
+  { deep: true }
 );
 
 // 深色模式

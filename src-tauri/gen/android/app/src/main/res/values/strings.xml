@@ -1,4 +1,5 @@
 <resources>
     <string name="app_name">CUFE-COURSE</string>
     <string name="main_activity_title">CUFE-COURSE</string>
+    <string name="widget_description">显示当天课程进度</string>
 </resources>

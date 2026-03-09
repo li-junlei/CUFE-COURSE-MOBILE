@@ -24,6 +24,7 @@ use commands::config;
 use commands::date;
 use commands::background;
 use commands::update;
+use commands::widget;
 
 // ============== Main Entry Point ==============
 
@@ -85,6 +86,9 @@ pub fn run() {
             background::upload_background_image,
             // 更新命令
             update::check_update,
+            // Widget 命令
+            widget::get_widget_data,
+            widget::save_widget_data,
         ])
         .run(tauri::generate_context!())
         .expect("error while running tauri application");

@@ -1,0 +1,147 @@
+<?xml version="1.0" encoding="utf-8"?>
+<LinearLayout xmlns:android="http://schemas.android.com/apk/res/android"
+    android:id="@+id/widget_container"
+    android:layout_width="match_parent"
+    android:layout_height="match_parent"
+    android:orientation="vertical"
+    android:background="@android:color/white"
+    android:padding="8dp">
+
+    <!-- 顶部状态栏 -->
+    <TextView
+        android:id="@+id/widget_header"
+        android:layout_width="match_parent"
+        android:layout_height="wrap_content"
+        android:gravity="center"
+        android:text="第 5 周  3月9日  星期一"
+        android:textColor="#757575"
+        android:textSize="11sp"
+        android:paddingBottom="6dp"
+        android:maxLines="1"
+        android:ellipsize="end" />
+
+    <!-- 分割线（使用 TextView 保持 RemoteViews 兼容） -->
+    <TextView
+        android:layout_width="match_parent"
+        android:layout_height="1dp"
+        android:background="#E0E0E0"
+        android:layout_marginBottom="4dp"
+        android:text="" />
+
+    <!-- 课程列表容器 -->
+    <LinearLayout
+        android:id="@+id/courses_container"
+        android:layout_width="match_parent"
+        android:layout_height="0dp"
+        android:layout_weight="1"
+        android:orientation="vertical">
+
+        <!-- 课程1 -->
+        <LinearLayout
+            android:id="@+id/course1_layout"
+            android:layout_width="match_parent"
+            android:layout_height="0dp"
+            android:layout_weight="1"
+            android:orientation="vertical"
+            android:gravity="center_vertical"
+            android:paddingVertical="2dp">
+
+            <TextView
+                android:id="@+id/course1_name"
+                android:layout_width="match_parent"
+                android:layout_height="wrap_content"
+                android:text="课程名称"
+                android:textColor="#212121"
+                android:textSize="13sp"
+                android:textStyle="bold"
+                android:maxLines="1"
+                android:ellipsize="end" />
+
+            <TextView
+                android:id="@+id/course1_location"
+                android:layout_width="match_parent"
+                android:layout_height="wrap_content"
+                android:text="教室地点"
+                android:textColor="#9E9E9E"
+                android:textSize="11sp"
+                android:maxLines="1"
+                android:ellipsize="end" />
+
+            <TextView
+                android:id="@+id/course1_time"
+                android:layout_width="match_parent"
+                android:layout_height="wrap_content"
+                android:text="上课时间"
+                android:textColor="#9E9E9E"
+                android:textSize="10sp"
+                android:maxLines="1" />
+
+        </LinearLayout>
+
+        <!-- 课程间分割线（使用 TextView 保持 RemoteViews 兼容） -->
+        <TextView
+            android:id="@+id/divider"
+            android:layout_width="match_parent"
+            android:layout_height="1dp"
+            android:background="#E0E0E0"
+            android:visibility="gone"
+            android:text="" />
+
+        <!-- 课程2 -->
+        <LinearLayout
+            android:id="@+id/course2_layout"
+            android:layout_width="match_parent"
+            android:layout_height="0dp"
+            android:layout_weight="1"
+            android:orientation="vertical"
+            android:gravity="center_vertical"
+            android:paddingVertical="2dp"
+            android:visibility="gone">
+
+            <TextView
+                android:id="@+id/course2_name"
+                android:layout_width="match_parent"
+                android:layout_height="wrap_content"
+                android:text="课程名称"
+                android:textColor="#212121"
+                android:textSize="13sp"
+                android:textStyle="bold"
+                android:maxLines="1"
+                android:ellipsize="end" />
+
+            <TextView
+                android:id="@+id/course2_location"
+                android:layout_width="match_parent"
+                android:layout_height="wrap_content"
+                android:text="教室地点"
+                android:textColor="#9E9E9E"
+                android:textSize="11sp"
+                android:maxLines="1"
+                android:ellipsize="end" />
+
+            <TextView
+                android:id="@+id/course2_time"
+                android:layout_width="match_parent"
+                android:layout_height="wrap_content"
+                android:text="上课时间"
+                android:textColor="#9E9E9E"
+                android:textSize="10sp"
+                android:maxLines="1" />
+
+        </LinearLayout>
+
+    </LinearLayout>
+
+    <!-- 空状态提示 -->
+    <TextView
+        android:id="@+id/empty_message"
+        android:layout_width="match_parent"
+        android:layout_height="0dp"
+        android:layout_weight="1"
+        android:gravity="center"
+        android:text="课程结束啦 🎉"
+        android:textColor="#9E9E9E"
+        android:textSize="14sp"
+        android:visibility="gone" />
+
+</LinearLayout>
