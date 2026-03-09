@@ -79,7 +79,7 @@ pub async fn check_update(
         .build()
         .map_err(|e| format!("创建 HTTP 客户端失败: {}", e))?;
 
-    let url = "https://api.github.com/repos/li-junlei/CUFE-COURSE/releases/latest";
+    let url = "https://api.github.com/repos/li-junlei/CUFE-COURSE-MOBILE/releases/latest";
 
     let response = match client.get(url).header("Accept", "application/vnd.github+json").send().await {
         Ok(resp) => resp,
