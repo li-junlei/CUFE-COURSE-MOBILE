@@ -2036,20 +2036,46 @@ html.dark .custom-input .el-input__wrapper.is-focus {
 .custom-dialog {
   background-color: transparent !important;
   box-shadow: none !important;
-  margin: 0 !important; /* Managed by align-center */
-  width: 90vw !important; /* Forced visual width relative to viewport */
+  margin: 0 !important;
+  width: 90vw !important;
   max-width: 480px;
   min-width: 300px !important;
   max-height: 90vh !important;
   display: flex !important;
   flex-direction: column !important;
-  position: relative !important;
+  position: fixed !important;
   transform: none !important;
-  /* Reset positioning overrides as align-center handles it, but ensure no weird offsets */
-  left: auto !important;
-  top: auto !important;
+  /* 绝对居中机制 */
+  top: 50% !important;
+  left: 50% !important;
+  right: auto !important;
+  bottom: auto !important;
+  transform: translate(-50%, -50%) !important;
   --el-dialog-bg-color: transparent !important;
   border-radius: var(--border-radius-lg) !important;
+  z-index: 2000 !important;
+}
+
+/* 确保对话框遮罩层也居中 */
+.custom-dialog.el-dialog {
+  margin: 0 !important;
+}
+
+/* 移动端适配 - 更小的对话框宽度 */
+@media (max-width: 400px) {
+  .custom-dialog {
+    width: 92vw !important;
+    min-width: unset !important;
+    max-width: 92vw !important;
+  }
+}
+
+/* 极窄屏幕 */
+@media (max-width: 360px) {
+  .custom-dialog {
+    width: 95vw !important;
+    max-width: 95vw !important;
+  }
 }
 
 /* Ensure no child forces width beyond 100% */
@@ -2267,8 +2293,7 @@ html.dark .custom-input .el-input__wrapper.is-focus {
 
 .schedule-list-item {
   display: flex;
-  align-items: center;
-  justify-content: space-between;
+  flex-direction: column;
   padding: 14px 18px;
   background-color: var(--card-bg);
   border-radius: 14px;
@@ -2276,11 +2301,12 @@ html.dark .custom-input .el-input__wrapper.is-focus {
   transition: all 0.2s;
   cursor: pointer;
   box-shadow: var(--shadow-sm);
+  gap: 12px;
 }
 
 .schedule-list-item:hover {
   background-color: var(--surface-color-strong);
-  transform: translateX(4px);
+  transform: translateY(-2px);
   box-shadow: var(--shadow-sm);
 }
 
@@ -2292,8 +2318,8 @@ html.dark .custom-input .el-input__wrapper.is-focus {
 
 .item-main {
   flex: 1;
-  min-width: 0; /* Crucial for flex content truncation */
-  margin-right: 12px;
+  min-width: 0;
+  width: 100%;
 }
 
 .item-header {
@@ -2310,27 +2336,29 @@ html.dark .custom-input .el-input__wrapper.is-focus {
   white-space: nowrap;
   overflow: hidden;
   text-overflow: ellipsis;
+  flex: 1;
 }
 
 .status-tag {
-  flex-shrink: 0; /* Tag shouldn't shrink */
+  flex-shrink: 0;
 }
 
 .item-meta {
   display: flex;
-  gap: 12px;
+  flex-wrap: wrap;
+  gap: 8px 12px;
   font-size: 12px;
   color: var(--text-tertiary);
-  white-space: nowrap;
-  overflow: hidden;
-  text-overflow: ellipsis;
 }
 
 .item-actions {
   display: flex;
-  gap: 4px; /* Tighter gap */
-  opacity: 1; /* Always visible for mobile friendliness or handle via hover on desktop */
+  gap: 8px;
+  opacity: 1;
   flex-shrink: 0;
+  padding-top: 8px;
+  border-top: 1px solid var(--border-color);
+  justify-content: flex-end;
 }
 
 /* --- Detail Sheet Styles --- */
@@ -2453,25 +2481,19 @@ html.dark .detail-icon-box.purple { background-color: rgba(139, 92, 246, 0.2); }
 
 
 
-/* On desktop, we can hide actions until hover if preferred, but for now let's keep them accessible or check previous logic */
+/* 桌面端 hover 效果 - 保持按钮始终可见，简化交互 */
 @media (hover: hover) {
-  .item-actions {
-    opacity: 0;
-    transform: translateX(10px);
-    transition: all 0.2s;
-  }
   .schedule-list-item:hover .item-actions {
     opacity: 1;
-    transform: translateX(0);
   }
 }
 
 .action-btn {
-  width: 32px;
-  height: 32px;
+  width: 36px;
+  height: 36px;
   font-size: 16px;
   color: var(--text-secondary);
-  border-radius: 8px; /* Softer shape */
+  border-radius: 8px;
 }
 
 .action-btn:hover {
@@ -2482,6 +2504,15 @@ html.dark .detail-icon-box.purple { background-color: rgba(139, 92, 246, 0.2); }
 .action-btn.danger:hover {
   background-color: rgba(239, 68, 68, 0.1);
   color: #ef4444;
+}
+
+/* 移动端适配 - 调整按钮大小 */
+@media (max-width: 360px) {
+  .action-btn {
+    width: 32px;
+    height: 32px;
+    font-size: 14px;
+  }
 }
 
 .empty-state {

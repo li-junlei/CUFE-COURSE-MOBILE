@@ -14,7 +14,11 @@
     <div class="time-bar">
       <div v-for="(time, index) in courseTime" :key="index" class="time-slot">
         <span class="period-number">{{ index + 1 }}</span>
-        <span class="period-time">{{ time }}</span>
+        <div class="period-time-wrapper">
+          <span class="period-time-start">{{ getTimeStart(time) }}</span>
+          <span class="period-time-sep">-</span>
+          <span class="period-time-end">{{ getTimeEnd(time) }}</span>
+        </div>
       </div>
     </div>
 
@@ -100,7 +104,17 @@ const emit = defineEmits<{
   (e: 'course-click', course: Course): void;
 }>();
 
-// Dynamic Time Slots
+// 获取时间开始部分（8:00）
+const getTimeStart = (time: string) => {
+  return time.split('-')[0];
+};
+
+// 获取时间结束部分（8:45）
+const getTimeEnd = (time: string) => {
+  return time.split('-')[1];
+};
+
+// Dynamic Time Slots - 时间数组
 const courseTime = computed(() => {
   // If custom times provided and length matches (or close enough), use them.
   // We prioritize maxPeriods length.
@@ -211,8 +225,8 @@ function endSwipe() {
 
 /* 左侧时间栏 - 悬浮透明风格 */
 .time-bar {
-  width: 48px; /* Fixed width */
-  min-width: 48px;
+  width: 38px; /* 减小宽度以适应移动端 */
+  min-width: 38px;
   height: 100%;
   display: flex;
   flex-direction: column;
@@ -231,26 +245,46 @@ function endSwipe() {
 }
 
 .period-number {
-  font-size: 14px;
+  font-size: 12px;
   font-weight: 600;
   color: var(--text-main);
   opacity: 0.9;
   line-height: 1.2;
 }
 
-.period-time {
+/* 两行时间显示容器 */
+.period-time-wrapper {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  line-height: 1.2;
+}
+
+.period-time-start {
   color: var(--text-tertiary);
-  font-size: 10px;
-  transform: scale(0.9);
-  white-space: nowrap;
+  font-size: 9px;
   font-weight: 500;
+  white-space: nowrap;
+}
+
+.period-time-sep {
+  color: var(--text-tertiary);
+  font-size: 8px;
+  opacity: 0.6;
+}
+
+.period-time-end {
+  color: var(--text-tertiary);
+  font-size: 9px;
+  font-weight: 500;
+  white-space: nowrap;
 }
 
 /* 右侧课表区域 */
 .schedule-area {
   position: relative;
   flex: 1;
-  width: calc(100% - 48px);
+  width: calc(100% - 38px);
   height: 100%;
   background-size: cover;
   background-position: center;
@@ -295,4 +329,28 @@ function endSwipe() {
   border-left: 2px dashed var(--border-color);
 }
 
+/* 移动端适配 - 极窄屏幕 */
+@media (max-width: 360px) {
+  .time-bar {
+    width: 32px;
+    min-width: 32px;
+  }
+  
+  .schedule-area {
+    width: calc(100% - 32px);
+  }
+  
+  .period-number {
+    font-size: 10px;
+  }
+  
+  .period-time-start,
+  .period-time-end {
+    font-size: 8px;
+  }
+  
+  .period-time-sep {
+    font-size: 7px;
+  }
+}
 </style>

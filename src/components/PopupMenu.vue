@@ -81,27 +81,34 @@ defineEmits<{
 
 .popup-menu {
   display: flex;
-  flex-wrap: wrap;
-  gap: 12px;
-  padding: 0 10px 16px;
+  flex-wrap: nowrap;
+  gap: 8px;
+  padding: 0 4px 16px;
   justify-content: center;
+  overflow-x: auto;
 }
 
 .menu-item {
   display: flex;
   flex-direction: column;
   align-items: center;
-  gap: 10px;
-  padding: 16px;
+  gap: 8px;
+  padding: 12px 8px;
   cursor: pointer;
-  border-radius: 20px;
+  border-radius: 16px;
   transition: all 0.2s cubic-bezier(0.4, 0, 0.2, 1);
-  font-size: 13px;
+  font-size: 11px;
   font-weight: 500;
   color: var(--text-main);
   background-color: var(--surface-color-light);
   border: 1px solid var(--border-color);
-  width: 80px; /* Fixed width for alignment */
+  flex: 1;
+  min-width: 0;
+  max-width: 25%;
+}
+
+.menu-item .el-icon {
+  font-size: 24px;
 }
 
 .menu-item:hover {
@@ -145,6 +152,41 @@ defineEmits<{
 @media (prefers-color-scheme: dark) {
   .menu-item {
     background-color: rgba(255, 255, 255, 0.05);
+  }
+}
+
+/* 较大屏幕下的样式 */
+@media (min-width: 400px) {
+  .popup-menu {
+    gap: 12px;
+    padding: 0 10px 16px;
+  }
+  
+  .menu-item {
+    padding: 14px 10px;
+    font-size: 12px;
+  }
+  
+  .menu-item .el-icon {
+    font-size: 26px;
+  }
+}
+
+/* 平板及以上屏幕 */
+@media (min-width: 600px) {
+  .popup-menu {
+    gap: 16px;
+    padding: 0 20px 20px;
+  }
+  
+  .menu-item {
+    padding: 16px 14px;
+    font-size: 13px;
+    gap: 10px;
+  }
+  
+  .menu-item .el-icon {
+    font-size: 28px;
   }
 }
 </style>
