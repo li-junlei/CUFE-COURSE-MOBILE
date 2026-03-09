@@ -13,7 +13,30 @@ val tauriProperties = Properties().apply {
     }
 }
 
+// 签名配置 - 优先使用环境变量/gradle属性，否则使用默认值
+val releaseKeyAlias: String = findProperty("cufe_course_mobile.release.keyAlias") as? String 
+    ?: System.getenv("ORG_GRADLE_PROJECT_cufe_course_mobile_RELEASE_KEY_ALIAS") 
+    ?: "cufe-course"
+val releaseKeyPassword: String = findProperty("cufe_course_mobile.release.keyPassword") as? String 
+    ?: System.getenv("ORG_GRADLE_PROJECT_cufe_course_mobile_RELEASE_KEY_PASSWORD") 
+    ?: "cufe2024"
+val releaseStoreFileName: String = findProperty("cufe_course_mobile.release.storeFile") as? String 
+    ?: System.getenv("ORG_GRADLE_PROJECT_cufe_course_mobile_RELEASE_STORE_FILE") 
+    ?: "release.keystore"
+val releaseStorePassword: String = findProperty("cufe_course_mobile.release.storePassword") as? String 
+    ?: System.getenv("ORG_GRADLE_PROJECT_cufe_course_mobile_RELEASE_STORE_PASSWORD") 
+    ?: "cufe2024"
+
 android {
+    // 在android块级别创建signingConfigs
+    signingConfigs {
+        create("release") {
+            keyAlias = releaseKeyAlias
+            keyPassword = releaseKeyPassword
+            storeFile = file(releaseStoreFileName)
+            storePassword = releaseStorePassword
+        }
+    }
     compileSdk = 36
     namespace = "com.lijunlei.cufecourse"
     defaultConfig {
@@ -40,6 +63,7 @@ android {
             }
         }
         getByName("release") {
+            signingConfig = signingConfigs.getByName("release")
             isMinifyEnabled = true
             proguardFiles(
                 *fileTree(".") { include("**/*.pro") }
@@ -71,3 +95,4 @@ dependencies {
 }
 
 apply(from = "tauri.build.gradle.kts")
+

@@ -31,3 +31,10 @@ src-tauri/gen/android/.idea
 src-tauri/gen/android/app/build
 src-tauri/gen/android/app/src/main/assets/
 src-tauri/gen/android/app/src/main/jniLibs/
+
+# Android signing (sensitive)
+src-tauri/android/*.keystore
+src-tauri/android/app/*.keystore
+src-tauri/android/app/tauri.properties
+src-tauri/gen/android/app/*.keystore
+src-tauri/gen/android/app/tauri.properties
