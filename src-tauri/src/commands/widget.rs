@@ -113,6 +113,19 @@ fn get_course_time_string(course: &Course, time_table: &[crate::models::PeriodTi
     ("".to_string(), "".to_string())
 }
 
+/// 简化地点显示（与课表卡片规则保持一致）
+fn format_location(location: &str, simplified: bool) -> String {
+    if !simplified {
+        return location.to_string();
+    }
+
+    let mut formatted = location.to_string();
+    for prefix in ["沙河校区", "学院南路校区", "沙河", "南路", "学院南路"] {
+        formatted = formatted.replace(prefix, "");
+    }
+    formatted.trim().to_string()
+}
+
 /// 获取 Widget 数据 - 当天课程信息
 #[tauri::command]
 pub fn get_widget_data() -> Result<WidgetData, String> {
@@ -134,6 +147,8 @@ pub fn get_widget_data() -> Result<WidgetData, String> {
         1
     };
     
+    let simplified_location = config.simplified_location.unwrap_or(false);
+
     // 获取课表数据
     let schedule_id = if let Some(id) = config.current_schedule_id {
         id
@@ -214,7 +229,7 @@ pub fn get_widget_data() -> Result<WidgetData, String> {
             let (start_time, end_time) = get_course_time_string(course, &time_table);
             WidgetCourseInfo {
                 name: course.name.clone(),
-                location: course.location.clone(),
+                location: format_location(&course.location, simplified_location),
                 start_time,
                 end_time,
                 period_start: *course.periods.first().unwrap_or(&1),

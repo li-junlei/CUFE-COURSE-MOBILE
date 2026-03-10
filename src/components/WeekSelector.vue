@@ -182,7 +182,7 @@ function onDrag(e: MouseEvent) {
 .week-selector {
   width: 100%;
   background-color: transparent;
-  overflow: hidden;
+  overflow: visible;
   margin-bottom: 4px;
 }
 
@@ -275,7 +275,7 @@ function onDrag(e: MouseEvent) {
 
 .week-selector-enter-to,
 .week-selector-leave-from {
-  max-height: 100px;
+  max-height: 220px;
   opacity: 1;
 }
 </style>

@@ -605,13 +605,6 @@
       </template>
     </el-dialog>
 
-    <!-- 主题切换按钮 -->
-    <div class="theme-toggle" @click="toggleTheme" :title="isDark ? '切换亮色模式' : '切换深色模式'">
-      <el-icon :size="20">
-        <Moon v-if="!isDark" />
-        <Sunny v-else />
-      </el-icon>
-    </div>
   </div>
   </el-config-provider>
 </template>
@@ -620,7 +613,7 @@
 import { ref, onMounted, onUnmounted, computed, watch } from 'vue';
 import { ElMessage, ElConfigProvider } from 'element-plus';
 import zhCn from 'element-plus/es/locale/lang/zh-cn';
-import { MoreFilled, ArrowDown, Loading, Plus, Picture, Delete, Close, Calendar, Collection, Sunny, Moon, Upload, Timer, User, Location, Edit, Check, Grid, View, Refresh, DocumentChecked, Download, FolderOpened } from '@element-plus/icons-vue';
+import { MoreFilled, ArrowDown, Loading, Plus, Picture, Delete, Close, Calendar, Collection, Upload, Timer, User, Location, Edit, Check, Grid, View, Refresh, DocumentChecked, Download, FolderOpened } from '@element-plus/icons-vue';
 import { invoke } from '@tauri-apps/api/core';
 import { localDataDir } from '@tauri-apps/api/path';
 import { open as openDialog, save as saveDialog } from '@tauri-apps/plugin-dialog';
@@ -1335,19 +1328,8 @@ async function initializeApp() {
     showImportDialog.value = true;
   }
 
-  // 初始化深色模式
-  const savedTheme = localStorage.getItem('theme');
-  const systemDark = window.matchMedia('(prefers-color-scheme: dark)').matches;
-
-  if (savedTheme === 'dark' || (!savedTheme && systemDark)) {
-    isDark.value = true;
-    document.documentElement.classList.add('dark');
-    document.documentElement.classList.remove('light');
-  } else {
-    isDark.value = false;
-    document.documentElement.classList.remove('dark');
-    document.documentElement.classList.add('light');
-  }
+  document.documentElement.classList.remove('dark');
+  document.documentElement.classList.add('light');
 }
 
 // 初始化
@@ -1447,21 +1429,6 @@ watch(
   { deep: true }
 );
 
-// 深色模式
-const isDark = ref(false);
-
-function toggleTheme() {
-  isDark.value = !isDark.value;
-  if (isDark.value) {
-    document.documentElement.classList.add('dark');
-    document.documentElement.classList.remove('light');
-    localStorage.setItem('theme', 'dark');
-  } else {
-    document.documentElement.classList.add('light');
-    document.documentElement.classList.remove('dark');
-    localStorage.setItem('theme', 'light');
-  }
-}
 </script>
 
 <style>
@@ -1549,42 +1516,6 @@ body {
   background-size: cover;
   background-position: center;
   transition: background-color 0.3s ease;
-}
-
-/* 主题切换按钮 */
-.theme-toggle {
-  position: fixed;
-  bottom: 24px;
-  right: 24px;
-  width: 44px;
-  height: 44px;
-  border-radius: 50%;
-  background-color: var(--surface-color-strong);
-  backdrop-filter: var(--surface-blur);
-  border: 1px solid var(--border-color);
-  display: flex;
-  align-items: center;
-  justify-content: center;
-  cursor: pointer;
-  box-shadow: var(--shadow-lg);
-  transition: all 0.3s cubic-bezier(0.4, 0, 0.2, 1);
-  z-index: 100;
-  color: var(--text-secondary);
-}
-
-.theme-toggle:hover {
-  transform: translateY(-2px) rotate(15deg);
-  background-color: var(--surface-color-strong);
-  color: var(--primary-color);
-  box-shadow: 0 8px 20px rgba(99, 102, 241, 0.25);
-}
-
-.theme-toggle:active {
-  transform: scale(0.92);
-}
-
-html.dark .theme-toggle {
-  color: #ffd700; /* Gold for sun */
 }
 
 /* 导航栏 - 浮动极简风格 */

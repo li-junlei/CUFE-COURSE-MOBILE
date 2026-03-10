@@ -117,8 +117,9 @@ class CourseWidgetProvider : AppWidgetProvider() {
                 // 顶部状态栏：周次取数据源，日期星期取系统当前时间
                 val currentWeek = json.optInt("currentWeek", 1)
                 val currentDate = "${calendar.get(Calendar.MONTH) + 1}月${calendar.get(Calendar.DAY_OF_MONTH)}日"
-                val dayName = getDayName(calendar.get(Calendar.DAY_OF_WEEK))
-                views.setTextViewText(R.id.widget_header, "第 ${currentWeek} 周  ${currentDate}  ${dayName}")
+                val dayName = getDayNameShort(calendar.get(Calendar.DAY_OF_WEEK))
+                views.setTextViewText(R.id.widget_week, "第 ${currentWeek} 周")
+                views.setTextViewText(R.id.widget_date_day, "${currentDate} ${dayName}")
 
                 val courses = json.optJSONArray("courses") ?: JSONArray()
                 val notEndedCourses = mutableListOf<CourseSnapshot>()
@@ -181,15 +182,15 @@ class CourseWidgetProvider : AppWidgetProvider() {
             }
         }
 
-        private fun getDayName(dayOfWeek: Int): String {
+        private fun getDayNameShort(dayOfWeek: Int): String {
             return when (dayOfWeek) {
-                Calendar.MONDAY -> "星期一"
-                Calendar.TUESDAY -> "星期二"
-                Calendar.WEDNESDAY -> "星期三"
-                Calendar.THURSDAY -> "星期四"
-                Calendar.FRIDAY -> "星期五"
-                Calendar.SATURDAY -> "星期六"
-                else -> "星期日"
+                Calendar.MONDAY -> "周一"
+                Calendar.TUESDAY -> "周二"
+                Calendar.WEDNESDAY -> "周三"
+                Calendar.THURSDAY -> "周四"
+                Calendar.FRIDAY -> "周五"
+                Calendar.SATURDAY -> "周六"
+                else -> "周日"
             }
         }
 
@@ -241,7 +242,10 @@ class CourseWidgetProvider : AppWidgetProvider() {
          * 显示默认状态
          */
         private fun showDefaultState(views: RemoteViews) {
-            views.setTextViewText(R.id.widget_header, "加载中...")
+            val calendar = Calendar.getInstance()
+            val currentDate = "${calendar.get(Calendar.MONTH) + 1}月${calendar.get(Calendar.DAY_OF_MONTH)}日"
+            views.setTextViewText(R.id.widget_week, "课程进度")
+            views.setTextViewText(R.id.widget_date_day, "${currentDate} ${getDayNameShort(calendar.get(Calendar.DAY_OF_WEEK))}")
             views.setViewVisibility(R.id.courses_container, android.view.View.GONE)
             views.setViewVisibility(R.id.empty_message, android.view.View.VISIBLE)
             views.setTextViewText(R.id.empty_message, "课程结束啦 🎉")
