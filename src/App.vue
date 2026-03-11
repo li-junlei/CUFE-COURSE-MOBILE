@@ -664,6 +664,7 @@ const pendingUpdate = ref<UpdateInfo | null>(null); // 待处理的更新信息
 const showAppearanceDialog = ref(false);
 const showScheduleManageDialog = ref(false);
 const showUserProfileDialog = ref(false); // 用户个人中心对话框
+const isFirstLaunch = ref(false); // 是否首次启动（无课表且无登录）
 const isSorting = ref(false); // 排序模式状态
 const showScheduleEditDialog = ref(false);
 const editingScheduleMeta = ref<ScheduleMetadata | undefined>(undefined);
@@ -1195,10 +1196,28 @@ async function handleToggleSimplifiedLocation() {
   }
 }
 
-async function handleImportSuccess(_scheduleId: string) {
-  // 1. 仅重新加载列表，不自动切换
+async function handleImportSuccess(scheduleId: string) {
+  // 1. 重新加载课表列表
   await loadScheduleList();
-  ElMessage.success('课表导入成功，请在课表管理中切换查看');
+  
+  // 2. 自动切换到新课表
+  try {
+    await switchScheduleFn(scheduleId);
+    await loadCachedSchedule(scheduleId);
+    currentScheduleId.value = scheduleId;
+    ElMessage.success('课表导入成功');
+    
+    // 3. 如果是首次启动流程，清除标记
+    if (isFirstLaunch.value) {
+      isFirstLaunch.value = false;
+    }
+    
+    // 4. 重新加载配置以应用新课表的设置
+    await loadConfig();
+  } catch (e) {
+    console.error('自动切换课表失败:', e);
+    ElMessage.warning('课表导入成功，但自动切换失败，请在课表管理中手动切换');
+  }
 }
 
 // 打开个人中心
@@ -1206,6 +1225,12 @@ async function handleImportSuccess(_scheduleId: string) {
 // 登录成功处理
 function handleLoginSuccess(userInfo: UserInfo) {
   globalUserInfo.value = userInfo;
+  
+  // 如果是首次启动流程，登录成功后自动显示导入课表对话框
+  if (isFirstLaunch.value) {
+    showUserProfileDialog.value = false;
+    showImportDialog.value = true;
+  }
 }
 
 // 退出登录处理
@@ -1324,8 +1349,16 @@ async function initializeApp() {
   if (hasCache) {
     await loadConfig();
   } else {
-    // 如果没有缓存,显示导入对话框
-    showImportDialog.value = true;
+    // 如果没有缓存课表，检查是否已登录
+    const loggedIn = await invoke<boolean>('is_logged_in');
+    if (!loggedIn) {
+      // 未登录，标记为首次启动并显示登录对话框
+      isFirstLaunch.value = true;
+      showUserProfileDialog.value = true;
+    } else {
+      // 已登录，显示导入课表对话框
+      showImportDialog.value = true;
+    }
   }
 
   document.documentElement.classList.remove('dark');

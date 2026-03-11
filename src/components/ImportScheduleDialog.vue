@@ -64,6 +64,22 @@
         </el-input>
         <div class="setting-desc">为导入的课表设置一个易于识别的名称</div>
       </div>
+
+      <!-- 第一周第一天日期选择 -->
+      <div class="setting-item">
+        <div class="setting-label">第一周第一天（周一）</div>
+        <el-date-picker
+          v-model="firstDayDate"
+          type="date"
+          placeholder="选择第一周周一的日期"
+          format="YYYY-MM-DD"
+          value-format="YYYY-MM-DD"
+          class="modern-input"
+          style="width: 100%"
+          :clearable="false"
+        />
+        <div class="setting-desc">选择校历第一周的周一日期，用于计算当前周次</div>
+      </div>
     </div>
 
     <div class="dialog-footer">
@@ -107,6 +123,7 @@ const dialogVisible = computed({
 const selectedYear = ref(2024);
 const selectedTerm = ref(1);
 const scheduleName = ref('');
+const firstDayDate = ref('');
 const loading = ref(false);
 
 // 生成可选学年列表（最近5年）
@@ -144,9 +161,38 @@ watch(() => props.modelValue, (newVal) => {
     
     // 自动生成课表名称
     scheduleName.value = `${selectedYear.value}-${selectedYear.value + 1}-${selectedTerm.value}`;
+    
+    // 自动计算第一周第一天的默认日期（学期开始日期的周一）
+    // 第一学期：9月1日所在周的周一
+    // 第二学期：2月20日所在周的周一
+    let defaultDate: Date;
+    if (selectedTerm.value === 1) {
+      // 第一学期：9月1日
+      defaultDate = new Date(selectedYear.value, 8, 1); // 9月1日 (月份从0开始)
+    } else {
+      // 第二学期：2月20日
+      defaultDate = new Date(selectedYear.value + 1, 1, 20); // 2月20日
+    }
+    
+    // 调整到该周的周一 (周一为1，周日为0)
+    const dayOfWeek = defaultDate.getDay();
+    const daysToMonday = dayOfWeek === 0 ? -6 : 1 - dayOfWeek;
+    defaultDate.setDate(defaultDate.getDate() + daysToMonday);
+    
+    // 格式化为 YYYY-MM-DD
+    firstDayDate.value = formatDateToString(defaultDate);
+    
     loading.value = false;
   }
 });
+
+// 格式化日期为 YYYY-MM-DD
+function formatDateToString(date: Date): string {
+  const year = date.getFullYear();
+  const month = String(date.getMonth() + 1).padStart(2, '0');
+  const day = String(date.getDate()).padStart(2, '0');
+  return `${year}-${month}-${day}`;
+}
 
 // 监听学年学期变化，更新课表名称
 watch([selectedYear, selectedTerm], () => {
@@ -163,12 +209,18 @@ const handleImport = async () => {
     return;
   }
 
+  if (!firstDayDate.value) {
+    ElMessage.warning('请选择第一周第一天日期');
+    return;
+  }
+
   loading.value = true;
   try {
     const scheduleId = await invoke<string>('import_schedule_from_saved_login', {
       year: selectedYear.value,
       term: selectedTerm.value,
       scheduleName: scheduleName.value.trim(),
+      firstDayDate: firstDayDate.value,
     });
 
     ElMessage.success('课表导入成功');

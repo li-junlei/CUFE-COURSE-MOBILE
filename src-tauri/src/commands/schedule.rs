@@ -5,7 +5,7 @@ use crate::crypto::decrypt_password_dpapi;
 use crate::models::{Course, CachedSchedule, ScheduleMetadata, ScheduleDiff, UserCredentials, CourseType};
 use crate::storage::StorageManager;
 use crate::services::schedule_service::calculate_schedule_diff;
-use chrono::{Utc, Datelike};
+use chrono::{Utc, Datelike, NaiveDate, FixedOffset, TimeZone};
 use std::sync::Arc;
 
 /// 使用已保存的登录状态导入课表
@@ -15,6 +15,7 @@ pub async fn import_schedule_from_saved_login(
     year: i32,
     term: i32,
     schedule_name: String,
+    first_day_date: Option<String>,
 ) -> Result<String, String> {
     // 检查是否已登录
     if !state.is_logged_in() {
@@ -45,13 +46,36 @@ pub async fn import_schedule_from_saved_login(
     let max_index = current_list.iter().filter_map(|s| s.sort_index).max().unwrap_or(-1);
     let sort_index = max_index + 1;
 
+    // 解析第一周第一天日期（使用东八区时间）
+    let first_day = first_day_date.and_then(|date_str| {
+        NaiveDate::parse_from_str(&date_str, "%Y-%m-%d")
+            .ok()
+            .map(|date| {
+                // 将日期转换为东八区的时间戳（当天零点）
+                let datetime = date.and_hms_opt(0, 0, 0).unwrap_or_else(|| Utc::now().naive_utc());
+                let offset = FixedOffset::east_opt(8 * 3600).expect("Invalid timezone offset");
+                offset.from_local_datetime(&datetime).single()
+                    .map(|dt: chrono::DateTime<FixedOffset>| dt.timestamp())
+                    .unwrap_or_else(|| Utc::now().timestamp())
+            })
+    });
+
+    // 如果有 first_day，同时更新全局配置
+    if let Some(timestamp) = first_day {
+        let mut config = storage.load_config().unwrap_or_default();
+        config.first_day = Some(timestamp);
+        if let Err(e) = storage.save_config(&config) {
+            eprintln!("保存配置失败: {}", e);
+        }
+    }
+
     let cached = CachedSchedule {
         id: schedule_id.clone(),
         name: schedule_name,
         courses,
         timestamp: now,
         expire_time,
-        first_day: None,
+        first_day,
         max_periods: None,
         weeks_count: None,
         time_table_id: None,
@@ -61,6 +85,16 @@ pub async fn import_schedule_from_saved_login(
     };
 
     storage.save_schedule(&cached)?;
+
+    // 自动切换到新课表
+    let mut config = storage.load_config().unwrap_or_default();
+    config.current_schedule_id = Some(schedule_id.clone());
+    if let Some(timestamp) = first_day {
+        config.first_day = Some(timestamp);
+    }
+    if let Err(e) = storage.save_config(&config) {
+        eprintln!("保存配置失败: {}", e);
+    }
 
     Ok(schedule_id)
 }
@@ -72,6 +106,7 @@ pub async fn import_schedule_with_auto_relogin(
     year: i32,
     term: i32,
     schedule_name: String,
+    first_day_date: Option<String>,
 ) -> Result<String, String> {
     // 尝试使用当前会话导入
     let import_result = import_schedule_from_saved_login(
@@ -79,6 +114,7 @@ pub async fn import_schedule_with_auto_relogin(
         year,
         term,
         schedule_name.clone(),
+        first_day_date.clone(),
     ).await;
 
     // 如果成功，直接返回
@@ -114,6 +150,7 @@ pub async fn import_schedule_with_auto_relogin(
         year,
         term,
         schedule_name,
+        first_day_date,
     ).await
 }
 
