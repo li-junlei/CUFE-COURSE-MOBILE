@@ -725,6 +725,10 @@ const reminderTimeTables = computed<TimeTable[]>(() => {
 
 const weekDays = ['周一', '周二', '周三', '周四', '周五', '周六', '周日'];
 
+// Widget 同步冷却时间（毫秒）- 避免频繁同步
+const WIDGET_SYNC_COOLDOWN = 5000;
+let lastWidgetSyncTime = 0;
+
 async function syncWidgetData() {
   try {
     await invoke('save_widget_data');
@@ -742,10 +746,23 @@ function scheduleWidgetSync(delay = 300) {
   }, delay);
 }
 
+// 统一的 widget 刷新触发函数（带防重复保护）
+function triggerWidgetRefresh() {
+  const now = Date.now();
+  if (now - lastWidgetSyncTime >= WIDGET_SYNC_COOLDOWN) {
+    scheduleWidgetSync(0);
+    lastWidgetSyncTime = now;
+  }
+}
+
 function handleVisibilityChange() {
   if (document.visibilityState === 'visible') {
-    scheduleWidgetSync(0);
+    triggerWidgetRefresh();
   }
+}
+
+function handleFocus() {
+  triggerWidgetRefresh();
 }
 
 // 重新计算当前周次
@@ -1377,6 +1394,7 @@ onMounted(() => {
   });
 
   document.addEventListener('visibilitychange', handleVisibilityChange);
+  window.addEventListener('focus', handleFocus);
   widgetSyncIntervalId = window.setInterval(() => {
     scheduleWidgetSync(0);
   }, 5 * 60 * 1000);
@@ -1396,6 +1414,7 @@ onMounted(() => {
 onUnmounted(() => {
   stopSessionKeepAlive();
   document.removeEventListener('visibilitychange', handleVisibilityChange);
+  window.removeEventListener('focus', handleFocus);
   if (widgetSyncIntervalId !== null) {
     window.clearInterval(widgetSyncIntervalId);
     widgetSyncIntervalId = null;
