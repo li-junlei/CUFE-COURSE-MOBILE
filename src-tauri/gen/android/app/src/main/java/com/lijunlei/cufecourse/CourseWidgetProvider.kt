@@ -114,8 +114,8 @@ class CourseWidgetProvider : AppWidgetProvider() {
             val nowMinutes = calendar.get(Calendar.HOUR_OF_DAY) * 60 + calendar.get(Calendar.MINUTE)
 
             return try {
-                // 顶部状态栏：周次取数据源，日期星期取系统当前时间
-                val currentWeek = json.optInt("currentWeek", 1)
+                // 顶部状态栏：日期星期取系统当前时间，周次按当前系统时间重新计算
+                val currentWeek = calculateCurrentWeek(json)
                 val currentDate = "${calendar.get(Calendar.MONTH) + 1}月${calendar.get(Calendar.DAY_OF_MONTH)}日"
                 val dayName = getDayNameShort(calendar.get(Calendar.DAY_OF_WEEK))
                 views.setTextViewText(R.id.widget_week, "第 ${currentWeek} 周")
@@ -124,9 +124,19 @@ class CourseWidgetProvider : AppWidgetProvider() {
                 val courses = json.optJSONArray("courses") ?: JSONArray()
                 val notEndedCourses = mutableListOf<CourseSnapshot>()
                 var nextCourseEndMinutes: Int? = null
+                val todayDayOfWeek = toWidgetDayOfWeek(calendar.get(Calendar.DAY_OF_WEEK))
+                val isLegacySnapshot = courses.length() > 0 && !courses.optJSONObject(0)?.has("dayOfWeek").orFalse()
 
                 for (i in 0 until courses.length()) {
                     val course = courses.optJSONObject(i) ?: continue
+                    if (!isLegacySnapshot) {
+                        if (course.optInt("dayOfWeek", -1) != todayDayOfWeek) {
+                            continue
+                        }
+                        if (!isCourseInWeek(course, currentWeek)) {
+                            continue
+                        }
+                    }
                     val endTime = course.optString("endTime", "")
                     val endMinutes = toMinutes(endTime)
                     if (endMinutes != null && endMinutes > nowMinutes) {
@@ -191,6 +201,54 @@ class CourseWidgetProvider : AppWidgetProvider() {
                 Calendar.FRIDAY -> "周五"
                 Calendar.SATURDAY -> "周六"
                 else -> "周日"
+            }
+        }
+
+        private fun toWidgetDayOfWeek(calendarDayOfWeek: Int): Int {
+            return when (calendarDayOfWeek) {
+                Calendar.MONDAY -> 1
+                Calendar.TUESDAY -> 2
+                Calendar.WEDNESDAY -> 3
+                Calendar.THURSDAY -> 4
+                Calendar.FRIDAY -> 5
+                Calendar.SATURDAY -> 6
+                else -> 7
+            }
+        }
+
+        private fun calculateCurrentWeek(json: JSONObject): Int {
+            val nowSeconds = System.currentTimeMillis() / 1000
+            val firstDay = json.optLong("firstDay", 0L).takeIf { it > 0L }
+            val weeksCount = json.optInt("weeksCount", 20).takeIf { it > 0 } ?: 20
+
+            val week = if (firstDay != null) {
+                (((nowSeconds - firstDay) / (7 * 24 * 60 * 60)) + 1).toInt().coerceAtLeast(1)
+            } else {
+                json.optInt("currentWeek", 1).coerceAtLeast(1)
+            }
+
+            return week.coerceAtMost(weeksCount)
+        }
+
+        private fun isCourseInWeek(course: JSONObject, week: Int): Boolean {
+            val weeks = course.optJSONArray("weeks") ?: return false
+            val weekType = course.optInt("weekType", 0)
+            var containsWeek = false
+            for (i in 0 until weeks.length()) {
+                if (weeks.optInt(i, Int.MIN_VALUE) == week) {
+                    containsWeek = true
+                    break
+                }
+            }
+
+            if (!containsWeek) {
+                return false
+            }
+
+            return when (weekType) {
+                1 -> week % 2 == 1
+                2 -> week % 2 == 0
+                else -> true
             }
         }
 
@@ -267,14 +325,23 @@ class CourseWidgetProvider : AppWidgetProvider() {
                     PendingIntent.FLAG_UPDATE_CURRENT or PendingIntent.FLAG_IMMUTABLE,
                 )
 
-                if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.M) {
+                val canUseExactAlarm =
+                    Build.VERSION.SDK_INT < Build.VERSION_CODES.S || alarmManager.canScheduleExactAlarms()
+
+                if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.M && canUseExactAlarm) {
                     alarmManager.setExactAndAllowWhileIdle(
                         AlarmManager.RTC_WAKEUP,
                         triggerAtMillis,
                         pendingIntent,
                     )
+                } else if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.M) {
+                    alarmManager.setAndAllowWhileIdle(
+                        AlarmManager.RTC_WAKEUP,
+                        triggerAtMillis,
+                        pendingIntent,
+                    )
                 } else {
-                    alarmManager.setExact(
+                    alarmManager.set(
                         AlarmManager.RTC_WAKEUP,
                         triggerAtMillis,
                         pendingIntent,
@@ -343,3 +410,5 @@ class CourseWidgetProvider : AppWidgetProvider() {
         }
     }
 }
+
+private fun Boolean?.orFalse(): Boolean = this ?: false

@@ -731,7 +731,7 @@ let lastWidgetSyncTime = 0;
 
 async function syncWidgetData() {
   try {
-    await invoke('save_widget_data');
+    await invoke('sync_widget_data');
   } catch (e) {
     console.warn('同步桌面小组件数据失败:', e);
   }
@@ -1474,7 +1474,15 @@ watch(
 );
 
 watch(
-  [courses, currentScheduleId, currentWeek],
+  [
+    courses,
+    currentScheduleId,
+    () => activeSchedule.value?.first_day,
+    () => activeSchedule.value?.weeks_count,
+    () => activeSchedule.value?.time_table_id,
+    () => config.value.simplified_location,
+    () => config.value.time_tables,
+  ],
   () => {
     scheduleWidgetSync(300);
   },

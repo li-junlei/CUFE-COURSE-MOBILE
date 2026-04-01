@@ -89,6 +89,7 @@ pub fn run() {
             // Widget 命令
             widget::get_widget_data,
             widget::save_widget_data,
+            widget::sync_widget_data,
         ])
         .run(tauri::generate_context!())
         .expect("error while running tauri application");

@@ -1,6 +1,6 @@
 [package]
 name = "cufe-course-mobile"
-version = "2.6.1"
+version = "2.7.0"
 description = "CUFE-COURSE Mobile App"
 authors = ["you"]
 edition = "2021"
@@ -35,3 +35,5 @@ scraper = "0.25.0"
 regex = "1.12.2"
 url = "2.5.8"
 uuid = { version = "1.0", features = ["v4"] }
+jni = "0.21"
+ndk-context = "0.1"
