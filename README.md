@@ -4,14 +4,12 @@
 
 ## 当前版本
 
-- `2.7.0`
+- `2.7.1`
 
 ## 本次更新重点
 
-- 修复 Android 小部件在课表变化后无法及时刷新的问题
-- 修复小部件跨天后仍读取旧课程快照的问题
-- 修复小部件周次筛选逻辑，兼容项目当前使用的展开周次数组格式
-- 优化小部件定时刷新兼容性，在无法使用精确定时闹钟时自动降级
+- 优化 Android 构建配置，仅编译 arm64-v8a ABI，减小 APK 体积
+- APK 文件名明确标识 arm64-v8a 架构
 
 ## 常用命令
 
@@ -23,5 +21,4 @@ npm run build:android
 
 ## Android Release 产物
 
-- APK: `src-tauri/gen/android/app/build/outputs/apk/universal/release/app-universal-release.apk`
-- AAB: `src-tauri/gen/android/app/build/outputs/bundle/universalRelease/app-universal-release.aab`
+- APK: `src-tauri/gen/android/app/build/outputs/apk/universal/release/cufe-course-v2.7.1-arm64-v8a-release.apk`

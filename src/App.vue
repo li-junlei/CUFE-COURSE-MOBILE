@@ -989,11 +989,18 @@ async function saveScheduleOrder() {
 // 删除课表
 async function handleDeleteSchedule(scheduleId: string) {
   try {
+    const wasCurrent = currentScheduleId.value === scheduleId;
     await deleteScheduleFn(scheduleId);
     ElMessage.success('删除成功');
     await loadScheduleList();
-    // 如果删除的是当前课表,清空显示
-    if (currentScheduleId.value === scheduleId) {
+    // 删除的是当前课表时，自动 fallback 到剩余列表第一项
+    // 避免后端 current_schedule_id 已置 None 导致下次启动走"无课表"流程
+    if (wasCurrent && scheduleList.value.length > 0) {
+      const next = scheduleList.value[0];
+      await switchScheduleFn(next.id);
+      await loadCachedSchedule(next.id);
+      currentScheduleId.value = next.id;
+    } else if (wasCurrent) {
       courses.value = [];
     }
   } catch (e) {
@@ -1360,13 +1367,14 @@ async function loadConfig() {
 
 // 初始化应用数据（异步）
 async function initializeApp() {
-  // 尝试加载缓存
-  const hasCache = await loadCachedSchedule();
+  // 1. 先加载配置（含 current_schedule_id），失败返回 {} 不阻塞
+  await loadConfig();
 
-  if (hasCache) {
-    await loadConfig();
-  } else {
-    // 如果没有缓存课表，检查是否已登录
+  // 2. 加载磁盘上的课表列表
+  const list = await loadScheduleList();
+
+  // 3. 列表为空 → 走原"未登录/导入"流程
+  if (list.length === 0) {
     const loggedIn = await invoke<boolean>('is_logged_in');
     if (!loggedIn) {
       // 未登录，标记为首次启动并显示登录对话框
@@ -1376,6 +1384,35 @@ async function initializeApp() {
       // 已登录，显示导入课表对话框
       showImportDialog.value = true;
     }
+    document.documentElement.classList.remove('dark');
+    document.documentElement.classList.add('light');
+    return;
+  }
+
+  // 4. 校验 current_schedule_id 是否仍指向存在的课表
+  const configCurrentId = config.value.current_schedule_id;
+  const exists = !!configCurrentId && list.some(s => s.id === configCurrentId);
+  let targetId: string;
+  if (exists) {
+    targetId = configCurrentId!;
+  } else {
+    // fallback：列表第一项（后端已按 sort_index → updated_at 排序）
+    // 同时同步到后端 config，避免下次启动再次走 fallback
+    targetId = list[0].id;
+    try {
+      await switchScheduleFn(targetId);
+    } catch (e) {
+      console.warn('启动 fallback switch 失败:', e);
+    }
+  }
+
+  // 5. 先设前端态，让 activeSchedule computed 立即生效
+  currentScheduleId.value = targetId;
+
+  // 6. 加载课表数据（失败保留 UI 态，仅 warn；用户可在管理列表手动更新）
+  const ok = await loadCachedSchedule(targetId);
+  if (!ok) {
+    console.warn('loadCachedSchedule 失败，UI 显示空课表但保留当前使用标识');
   }
 
   document.documentElement.classList.remove('dark');

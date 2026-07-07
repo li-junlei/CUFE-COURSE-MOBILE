@@ -50,6 +50,15 @@ android {
             abiFilters.add("arm64-v8a")
         }
     }
+    // 重命名 release APK 输出文件，明确标识 arm64-v8a ABI
+    // 注：Tauri 的 rust plugin 不兼容 splits.abi，因此采用 abiFilters + 重命名方案
+    applicationVariants.all {
+        outputs.all {
+            val outputImpl = this as com.android.build.gradle.internal.api.ApkVariantOutputImpl
+            val newName = "cufe-course-v${defaultConfig.versionName}-arm64-v8a-release.apk"
+            outputImpl.outputFileName = newName
+        }
+    }
     buildTypes {
         getByName("debug") {
             manifestPlaceholders["usesCleartextTraffic"] = "true"
