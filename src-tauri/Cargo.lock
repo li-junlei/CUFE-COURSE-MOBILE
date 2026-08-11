@@ -661,7 +661,7 @@ dependencies = [
 
 [[package]]
 name = "cufe-course-mobile"
-version = "2.7.1"
+version = "2.7.2"
 dependencies = [
  "base64 0.21.7",
  "chrono",

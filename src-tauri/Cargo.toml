@@ -1,6 +1,6 @@
 [package]
 name = "cufe-course-mobile"
-version = "2.7.1"
+version = "2.7.2"
 description = "CUFE-COURSE Mobile App"
 authors = ["you"]
 edition = "2021"

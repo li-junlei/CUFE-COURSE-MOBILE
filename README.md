@@ -4,12 +4,11 @@
 
 ## 当前版本
 
-- `2.7.1`
+- `2.7.2`
 
 ## 本次更新重点
 
-- 优化 Android 构建配置，仅编译 arm64-v8a ABI，减小 APK 体积
-- APK 文件名明确标识 arm64-v8a 架构
+- 修复单双周课程（周次含 `(单)`/`(双)` 标记，如"应用计量经济学"）在课表中缺失的问题
 
 ## 常用命令
 
@@ -21,4 +20,4 @@ npm run build:android
 
 ## Android Release 产物
 
-- APK: `src-tauri/gen/android/app/build/outputs/apk/universal/release/cufe-course-v2.7.1-arm64-v8a-release.apk`
+- APK: `src-tauri/gen/android/app/build/outputs/apk/universal/release/cufe-course-v2.7.2-arm64-v8a-release.apk`
