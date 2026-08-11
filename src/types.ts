@@ -26,7 +26,7 @@ export interface Course {
   name: string;
   /** 教师名称 */
   teacher: string;
-  /** 周次范围 [开始周, 结束周, 开始周2(可选), 结束周2(可选)] */
+  /** 周次列表（完整周次，已按 weekType 过滤单/双周） */
   weeks: number[];
   /** 单双周标记 (1=单周, 2=双周, 0=全周) */
   weekType: number;

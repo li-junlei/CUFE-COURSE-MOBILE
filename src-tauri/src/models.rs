@@ -32,7 +32,7 @@ pub struct Course {
     pub name: String,
     /// 教师名称
     pub teacher: String,
-    /// 周次范围 [开始周, 结束周, 开始周2(可选), 结束周2(可选)]
+    /// 周次列表（完整周次，已按 week_type 过滤单/双周）
     pub weeks: Vec<i32>,
     /// 单双周标记 (1=单周, 2=双周, 0=全周)
     pub week_type: i32,

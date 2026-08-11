@@ -30,9 +30,8 @@ export function useReminder() {
       if (course.dayOfWeek !== dayOfWeek) return false;
 
       // 检查当前周是否在课程周次范围内
-      if (course.weekType === 1 && currentWeek % 2 !== 1) return false; // 单周
-      if (course.weekType === 2 && currentWeek % 2 !== 0) return false; // 双周
-      if (course.weekType === 0 && !course.weeks.includes(currentWeek)) return false; // 全周
+      // weeks 为精确周次列表（后端已按 weekType 过滤单/双周），统一用 includes 判定
+      if (!course.weeks.includes(currentWeek)) return false;
 
       return true;
     });

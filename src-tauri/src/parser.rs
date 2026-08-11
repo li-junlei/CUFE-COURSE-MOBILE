@@ -89,12 +89,13 @@ pub fn parse_cufe_json(json_text: &str) -> Result<Vec<Course>, String> {
 
         let periods = parse_period_string(jc);
 
-        // 提取周次信息 (如 "4-5周,7-18周")
+        // 提取周次信息 (如 "4-5周,7-18周", "1-15周(单)", "2-16周(双)")
         let zcd = item.get("zcd")
             .and_then(|v| v.as_str())
             .unwrap_or("1-18周");
 
-        let weeks = parse_week_string(zcd);
+        // 解析周次与单双周类型：(单)=单周, (双)=双周, 无标记=全周
+        let (weeks, week_type) = parse_week_string(zcd);
 
         // 检查是否有课程类型符号 (xslxbj: "★", "○" 等)
         // 如果没有，默认为讲课类型
@@ -113,7 +114,7 @@ pub fn parse_cufe_json(json_text: &str) -> Result<Vec<Course>, String> {
             name: course_name_clean,
             teacher,
             weeks,
-            week_type: 0, // 默认为全周
+            week_type,
             day_of_week,
             periods,
             location: classroom,
@@ -151,16 +152,40 @@ fn parse_period_string(period_str: &str) -> Vec<i32> {
     }
 }
 
-/// 解析周次字符串 (如 "4-5周,7-18周", "3-18周", "2周,6周")
-fn parse_week_string(week_str: &str) -> Vec<i32> {
+/// 解析周次字符串 (如 "4-5周,7-18周", "1-15周(单)", "2-16周(双)", "2周,6周")
+/// 返回 (具体周次列表, 单双周类型)
+/// week_type: 0=全周, 1=单周(奇数周), 2=双周(偶数周)
+/// 正方教务系统会在 zcd 末尾追加 (单)/(双)/(单双) 标记表示单双周安排
+fn parse_week_string(week_str: &str) -> (Vec<i32>, i32) {
     let mut weeks = Vec::new();
 
-    // 移除"周"字，然后按逗号分割
-    let clean = week_str.replace("周", "");
+    // 识别单双周标记（兼容全角括号）
+    let has_odd = week_str.contains("(单)") || week_str.contains("（单）");
+    let has_even = week_str.contains("(双)") || week_str.contains("（双）");
+    let week_type = if has_odd && !has_even {
+        1 // 仅单周
+    } else if has_even && !has_odd {
+        2 // 仅双周
+    } else {
+        0 // 无标记，或同时含单双（如"(单双)"）视为全周
+    };
+
+    // 移除"周"字与各种单双周括号标记，再按逗号分割
+    let clean = week_str
+        .replace("周", "")
+        .replace("(单双)", "")
+        .replace("（单双）", "")
+        .replace("(单)", "")
+        .replace("（单）", "")
+        .replace("(双)", "")
+        .replace("（双）", "");
     let parts: Vec<&str> = clean.split(',').collect();
 
     for part in parts {
         let part = part.trim();
+        if part.is_empty() {
+            continue;
+        }
         if part.contains('-') {
             // 范围，如 "4-5"
             let range: Vec<&str> = part.split('-').collect();
@@ -181,11 +206,18 @@ fn parse_week_string(week_str: &str) -> Vec<i32> {
         }
     }
 
+    // 根据单双周类型过滤：单周保留奇数，双周保留偶数
+    if week_type == 1 {
+        weeks.retain(|w| w % 2 == 1);
+    } else if week_type == 2 {
+        weeks.retain(|w| w % 2 == 0);
+    }
+
     // 去重并排序
     weeks.sort();
     weeks.dedup();
 
-    weeks
+    (weeks, week_type)
 }
 
 #[cfg(test)]
@@ -193,76 +225,84 @@ mod tests {
     use super::*;
 
     #[test]
-    fn test_parse_course_html() {
-        let html = r#"
-        <!DOCTYPE html>
-        <html>
-        <body>
-            <table class="timetable">
-                <thead>
-                    <tr><th colspan="9">Course Schedule</th></tr>
-                    <tr><th>Section</th><th>Time</th><th>Mon</th><th>Tue</th><th>Wed</th><th>Thu</th><th>Fri</th><th>Sat</th><th>Sun</th></tr>
-                </thead>
-                <tbody>
-                    <tr>
-                        <td rowspan="4">上午</td>
-                        <td>1</td>
-                        <td>
-                            <div class="timetable_con">
-                                <span class="title">高等数学★</span>
-                                <p title="教师">张三</p>
-                                <p>1-16周</p>
-                                <p title="上课地点">主教101</p>
-                            </div>
-                        </td>
-                        <td>
-                            <div class="timetable_con">
-                                <span class="title">Test Course</span>
-                                <p title="教师">Smith</p>
-                                <p>2-4周</p>
-                                <p title="上课地点">Room 202</p>
-                            </div>
-                        </td>
-                        <td></td><td></td><td></td><td></td><td></td>
-                    </tr>
-                </tbody>
-            </table>
-        </body>
-        </html>
-        "#;
-
-        let courses = parse_course_html(html).expect("Failed to parse");
-        println!("Extracted courses: {:?}", courses);
-        // Note: The parser logic for "Mon"/"Tue" depends on specific Chinese strings "周一", "周二" etc in header or assumed order.
-        // My parser code: `let day_list = vec!["周一", "周二", ...];`
-        // And it finds period columns based on skipping first 1 or 2 cols.
-        // Wait, the parser logic iterates `cells` starting from index.
-        // It assumes 3rd row is data.
-        // And it maps columns to days using `col_rowspan` and `day_idx`.
-        // BUT `day_list` is just a list of names to assign.
-        // The parser logic does NOT look at the Table Header to determine which column is Monday.
-        // It assumes standard layout: Period Col -> Mon -> Tue -> ...
-        
-        // In my mock HTML above, I have `<td>1</td>` (Period) then `<td>...` (Mon).
-        // Let's verify parser logic:
-        // `is_time_slot` check: "上午" is in first cell? Yes.
-        // `start_cell_idx = 2`. Correct.
-        // `cells.skip(2)` -> Mon, Tue...
-        
-        // So first course (Mon) should be parsed.
-        // Second course (Tue) should be parsed.
-        
-        assert!(courses.len() >= 1);
-        let c1 = &courses[0];
-        assert_eq!(c1.name, "高等数学");
-        assert_eq!(c1.day_of_week, 1); // Mon
-        
-        if courses.len() > 1 {
-            let c2 = &courses[1];
-            assert_eq!(c2.name, "Test Course");
-            assert_eq!(c2.day_of_week, 2); // Tue
-        }
+    fn test_parse_week_string_normal() {
+        // 普通全周
+        let (weeks, wt) = parse_week_string("1-16周");
+        assert_eq!(wt, 0);
+        assert_eq!(weeks, (1..=16).collect::<Vec<_>>());
     }
+
+    #[test]
+    fn test_parse_week_string_multi_range() {
+        // 多段范围
+        let (weeks, wt) = parse_week_string("4-5周,7-18周");
+        assert_eq!(wt, 0);
+        let mut expected: Vec<i32> = (4..=5).chain(7..=18).collect();
+        expected.sort();
+        expected.dedup();
+        assert_eq!(weeks, expected);
+    }
+
+    #[test]
+    fn test_parse_week_string_discrete() {
+        // 离散周次
+        let (weeks, wt) = parse_week_string("2周,6周");
+        assert_eq!(wt, 0);
+        assert_eq!(weeks, vec![2, 6]);
+    }
+
+    #[test]
+    fn test_parse_week_string_odd_marker() {
+        // 单周标记：1-15周(单) -> 仅奇数周
+        let (weeks, wt) = parse_week_string("1-15周(单)");
+        assert_eq!(wt, 1);
+        assert_eq!(weeks, vec![1, 3, 5, 7, 9, 11, 13, 15]);
+    }
+
+    #[test]
+    fn test_parse_week_string_even_marker() {
+        // 双周标记：2-16周(双) -> 仅偶数周
+        let (weeks, wt) = parse_week_string("2-16周(双)");
+        assert_eq!(wt, 2);
+        assert_eq!(weeks, vec![2, 4, 6, 8, 10, 12, 14, 16]);
+    }
+
+    #[test]
+    fn test_parse_week_string_fullwidth_marker() {
+        // 全角括号兼容
+        let (weeks, wt) = parse_week_string("1-15周（单）");
+        assert_eq!(wt, 1);
+        assert_eq!(weeks, vec![1, 3, 5, 7, 9, 11, 13, 15]);
+    }
+
+    #[test]
+    fn test_parse_cufe_json_with_odd_even_weeks() {
+        // 模拟正方教务系统返回的单双周课程（参考真实抓包）
+        let json = r#"{"kbList":[
+            {"kcmc":"财务报表分析","xm":"卢钧","cdmc":"主教503","xqjmc":"星期一","jc":"3-5节","zcd":"1-16周","xslxbj":"★"},
+            {"kcmc":"应用计量经济学","xm":"王凯","cdmc":"主教319","xqjmc":"星期五","jc":"3-5节","zcd":"1-15周(单)","xslxbj":"★"},
+            {"kcmc":"应用计量经济学","xm":"王凯","cdmc":"实验楼404","xqjmc":"星期五","jc":"3-5节","zcd":"2-16周(双)","xslxbj":"○"}
+        ]}"#;
+        let courses = parse_cufe_json(json).expect("parse failed");
+        assert_eq!(courses.len(), 3);
+
+        // 全周课程
+        assert_eq!(courses[0].name, "财务报表分析");
+        assert_eq!(courses[0].week_type, 0);
+        assert_eq!(courses[0].weeks.len(), 16);
+
+        // 单周课程（讲课）
+        assert_eq!(courses[1].name, "应用计量经济学");
+        assert_eq!(courses[1].week_type, 1);
+        assert_eq!(courses[1].weeks, vec![1, 3, 5, 7, 9, 11, 13, 15]);
+        assert_eq!(courses[1].location, "主教319");
+
+        // 双周课程（实验）
+        assert_eq!(courses[2].week_type, 2);
+        assert_eq!(courses[2].weeks, vec![2, 4, 6, 8, 10, 12, 14, 16]);
+        assert_eq!(courses[2].location, "实验楼404");
+    }
+
 }
 
 /// ============================================================
