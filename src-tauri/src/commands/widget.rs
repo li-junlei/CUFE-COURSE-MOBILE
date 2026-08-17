@@ -44,7 +44,11 @@ pub struct WidgetData {
 
 fn compute_current_week(now_ts: i64, first_day: Option<i64>, weeks_count: Option<i32>) -> i32 {
     let week = if let Some(first_day) = first_day {
-        (((now_ts - first_day) / (7 * 24 * 60 * 60)) + 1).max(1) as i32
+        if now_ts < first_day {
+            // 学期未开始，返回 0 表示未开学
+            return 0;
+        }
+        (((now_ts - first_day) / (7 * 24 * 60 * 60)) + 1) as i32
     } else {
         1
     };
@@ -53,6 +57,17 @@ fn compute_current_week(now_ts: i64, first_day: Option<i64>, weeks_count: Option
         week.clamp(1, max_weeks)
     } else {
         week.max(1)
+    }
+}
+
+/// 根据周次与当天是否有课生成提示消息
+fn semester_status_message(current_week: i32, is_empty: bool) -> Option<String> {
+    if current_week <= 0 {
+        Some("还未开学".to_string())
+    } else if is_empty {
+        Some("课程结束啦 🎉".to_string())
+    } else {
+        None
     }
 }
 
@@ -145,7 +160,7 @@ pub fn get_widget_data() -> Result<WidgetData, String> {
             day_name: get_day_name(day_of_week),
             courses: vec![],
             is_empty: true,
-            message: Some("课程结束啦 🎉".to_string()),
+            message: semester_status_message(fallback_week, true),
         });
     };
     
@@ -163,7 +178,7 @@ pub fn get_widget_data() -> Result<WidgetData, String> {
                 day_name: get_day_name(day_of_week),
                 courses: vec![],
                 is_empty: true,
-                message: Some("课程结束啦 🎉".to_string()),
+                message: semester_status_message(fallback_week, true),
             });
         }
     };
@@ -237,11 +252,7 @@ pub fn get_widget_data() -> Result<WidgetData, String> {
             && is_week_in_ranges(&course.weeks, course.week_type, current_week)
     });
     let is_empty = !has_today_courses;
-    let message = if is_empty {
-        Some("课程结束啦 🎉".to_string())
-    } else {
-        None
-    };
+    let message = semester_status_message(current_week, is_empty);
     
     Ok(WidgetData {
         schema_version: 2,
@@ -359,4 +370,55 @@ pub fn sync_widget_data() -> Result<WidgetData, String> {
     let data = save_widget_data()?;
     notify_android_widget_update()?;
     Ok(data)
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    const WEEK_SECONDS: i64 = 7 * 24 * 60 * 60;
+
+    #[test]
+    fn week_before_semester_starts_returns_zero() {
+        let first_day = 1_800_000_000i64;
+        // 开学前一天 / 开学前多周，均应返回 0（未开学）
+        assert_eq!(compute_current_week(first_day - 1, Some(first_day), Some(20)), 0);
+        assert_eq!(compute_current_week(first_day - 3 * WEEK_SECONDS, Some(first_day), Some(20)), 0);
+    }
+
+    #[test]
+    fn week_during_semester_is_one_based() {
+        let first_day = 1_800_000_000i64;
+        assert_eq!(compute_current_week(first_day, Some(first_day), Some(20)), 1);
+        assert_eq!(compute_current_week(first_day + WEEK_SECONDS, Some(first_day), Some(20)), 2);
+        assert_eq!(compute_current_week(first_day + 10 * WEEK_SECONDS, Some(first_day), Some(20)), 11);
+    }
+
+    #[test]
+    fn week_after_semester_ends_is_clamped() {
+        let first_day = 1_800_000_000i64;
+        assert_eq!(compute_current_week(first_day + 25 * WEEK_SECONDS, Some(first_day), Some(20)), 20);
+    }
+
+    #[test]
+    fn week_without_first_day_falls_back_to_one() {
+        assert_eq!(compute_current_week(1_800_000_000, None, Some(20)), 1);
+        assert_eq!(compute_current_week(1_800_000_000, None, None), 1);
+    }
+
+    #[test]
+    fn status_message_reflects_semester_state() {
+        assert_eq!(semester_status_message(0, true).as_deref(), Some("还未开学"));
+        assert_eq!(semester_status_message(0, false).as_deref(), Some("还未开学"));
+        assert_eq!(semester_status_message(3, true).as_deref(), Some("课程结束啦 🎉"));
+        assert_eq!(semester_status_message(3, false), None);
+    }
+
+    #[test]
+    fn week_zero_matches_no_courses() {
+        let weeks = vec![1, 2, 3];
+        assert!(!is_week_in_ranges(&weeks, 0, 0));
+        assert!(is_week_in_ranges(&weeks, 0, 1));
+        assert!(is_week_in_ranges(&weeks, 2, 2));
+    }
 }

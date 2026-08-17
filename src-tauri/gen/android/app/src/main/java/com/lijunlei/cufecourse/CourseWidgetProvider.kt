@@ -118,7 +118,10 @@ class CourseWidgetProvider : AppWidgetProvider() {
                 val currentWeek = calculateCurrentWeek(json)
                 val currentDate = "${calendar.get(Calendar.MONTH) + 1}月${calendar.get(Calendar.DAY_OF_MONTH)}日"
                 val dayName = getDayNameShort(calendar.get(Calendar.DAY_OF_WEEK))
-                views.setTextViewText(R.id.widget_week, "第 ${currentWeek} 周")
+                views.setTextViewText(
+                    R.id.widget_week,
+                    if (currentWeek <= 0) "未开学" else "第 ${currentWeek} 周",
+                )
                 views.setTextViewText(R.id.widget_date_day, "${currentDate} ${dayName}")
 
                 val courses = json.optJSONArray("courses") ?: JSONArray()
@@ -160,7 +163,10 @@ class CourseWidgetProvider : AppWidgetProvider() {
                 if (displayCourses.isEmpty()) {
                     views.setViewVisibility(R.id.courses_container, android.view.View.GONE)
                     views.setViewVisibility(R.id.empty_message, android.view.View.VISIBLE)
-                    views.setTextViewText(R.id.empty_message, "课程结束啦 🎉")
+                    views.setTextViewText(
+                        R.id.empty_message,
+                        if (currentWeek <= 0) "还未开学" else "课程结束啦 🎉",
+                    )
                 } else {
                     views.setViewVisibility(R.id.courses_container, android.view.View.VISIBLE)
                     views.setViewVisibility(R.id.empty_message, android.view.View.GONE)
@@ -220,6 +226,11 @@ class CourseWidgetProvider : AppWidgetProvider() {
             val nowSeconds = System.currentTimeMillis() / 1000
             val firstDay = json.optLong("firstDay", 0L).takeIf { it > 0L }
             val weeksCount = json.optInt("weeksCount", 20).takeIf { it > 0 } ?: 20
+
+            // 学期未开始，返回 0 表示未开学
+            if (firstDay != null && nowSeconds < firstDay) {
+                return 0
+            }
 
             val week = if (firstDay != null) {
                 (((nowSeconds - firstDay) / (7 * 24 * 60 * 60)) + 1).toInt().coerceAtLeast(1)
