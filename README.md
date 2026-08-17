@@ -4,11 +4,11 @@
 
 ## 当前版本
 
-- `2.7.2`
+- `2.7.3`
 
 ## 本次更新重点
 
-- 修复单双周课程（周次含 `(单)`/`(双)` 标记，如"应用计量经济学"）在课表中缺失的问题
+- 修复开学前桌面小部件错误显示第一周对应星期课表的问题，未开学时显示"未开学"状态
 
 ## 常用命令
 
@@ -20,4 +20,4 @@ npm run build:android
 
 ## Android Release 产物
 
-- APK: `src-tauri/gen/android/app/build/outputs/apk/universal/release/cufe-course-v2.7.2-arm64-v8a-release.apk`
+- APK: `src-tauri/gen/android/app/build/outputs/apk/universal/release/cufe-course-v2.7.3-arm64-v8a-release.apk`
