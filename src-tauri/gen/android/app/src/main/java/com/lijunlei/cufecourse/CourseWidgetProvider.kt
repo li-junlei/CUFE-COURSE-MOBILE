@@ -116,11 +116,12 @@ class CourseWidgetProvider : AppWidgetProvider() {
             return try {
                 // 顶部状态栏：日期星期取系统当前时间，周次按当前系统时间重新计算
                 val currentWeek = calculateCurrentWeek(json)
+                val daysUntilStart = daysUntilSemesterStart(json)
                 val currentDate = "${calendar.get(Calendar.MONTH) + 1}月${calendar.get(Calendar.DAY_OF_MONTH)}日"
                 val dayName = getDayNameShort(calendar.get(Calendar.DAY_OF_WEEK))
                 views.setTextViewText(
                     R.id.widget_week,
-                    if (currentWeek <= 0) "未开学" else "第 ${currentWeek} 周",
+                    if (daysUntilStart != null) "距开学还剩${daysUntilStart}天" else "第 ${currentWeek} 周",
                 )
                 views.setTextViewText(R.id.widget_date_day, "${currentDate} ${dayName}")
 
@@ -165,7 +166,7 @@ class CourseWidgetProvider : AppWidgetProvider() {
                     views.setViewVisibility(R.id.empty_message, android.view.View.VISIBLE)
                     views.setTextViewText(
                         R.id.empty_message,
-                        if (currentWeek <= 0) "还未开学" else "课程结束啦 🎉",
+                        if (daysUntilStart != null) "距开学还剩${daysUntilStart}天" else "课程结束啦 🎉",
                     )
                 } else {
                     views.setViewVisibility(R.id.courses_container, android.view.View.VISIBLE)
@@ -239,6 +240,16 @@ class CourseWidgetProvider : AppWidgetProvider() {
             }
 
             return week.coerceAtMost(weeksCount)
+        }
+
+        /**
+         * 计算距开学的剩余天数（向上取整，不足一天算一天），已开学或无开学日期返回 null
+         */
+        private fun daysUntilSemesterStart(json: JSONObject): Int? {
+            val nowSeconds = System.currentTimeMillis() / 1000
+            val firstDay = json.optLong("firstDay", 0L).takeIf { it > 0L } ?: return null
+            if (nowSeconds >= firstDay) return null
+            return ((firstDay - nowSeconds + 86399) / 86400).toInt()
         }
 
         private fun isCourseInWeek(course: JSONObject, week: Int): Boolean {

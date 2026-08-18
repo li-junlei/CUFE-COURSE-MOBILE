@@ -61,9 +61,21 @@ fn compute_current_week(now_ts: i64, first_day: Option<i64>, weeks_count: Option
 }
 
 /// 根据周次与当天是否有课生成提示消息
-fn semester_status_message(current_week: i32, is_empty: bool) -> Option<String> {
+/// 未开学时显示距开学的剩余天数（向上取整，不足一天算一天）
+fn semester_status_message(
+    current_week: i32,
+    is_empty: bool,
+    now_ts: i64,
+    first_day: Option<i64>,
+) -> Option<String> {
     if current_week <= 0 {
-        Some("还未开学".to_string())
+        match first_day {
+            Some(first_day) => {
+                let remaining_days = (first_day - now_ts + 86399) / 86_400;
+                Some(format!("距开学还剩{remaining_days}天"))
+            }
+            None => Some("还未开学".to_string()),
+        }
     } else if is_empty {
         Some("课程结束啦 🎉".to_string())
     } else {
@@ -160,7 +172,7 @@ pub fn get_widget_data() -> Result<WidgetData, String> {
             day_name: get_day_name(day_of_week),
             courses: vec![],
             is_empty: true,
-            message: semester_status_message(fallback_week, true),
+            message: semester_status_message(fallback_week, true, now.timestamp(), config.first_day),
         });
     };
     
@@ -178,7 +190,7 @@ pub fn get_widget_data() -> Result<WidgetData, String> {
                 day_name: get_day_name(day_of_week),
                 courses: vec![],
                 is_empty: true,
-                message: semester_status_message(fallback_week, true),
+                message: semester_status_message(fallback_week, true, now.timestamp(), config.first_day),
             });
         }
     };
@@ -252,7 +264,7 @@ pub fn get_widget_data() -> Result<WidgetData, String> {
             && is_week_in_ranges(&course.weeks, course.week_type, current_week)
     });
     let is_empty = !has_today_courses;
-    let message = semester_status_message(current_week, is_empty);
+    let message = semester_status_message(current_week, is_empty, now.timestamp(), first_day);
     
     Ok(WidgetData {
         schema_version: 2,
@@ -408,10 +420,28 @@ mod tests {
 
     #[test]
     fn status_message_reflects_semester_state() {
-        assert_eq!(semester_status_message(0, true).as_deref(), Some("还未开学"));
-        assert_eq!(semester_status_message(0, false).as_deref(), Some("还未开学"));
-        assert_eq!(semester_status_message(3, true).as_deref(), Some("课程结束啦 🎉"));
-        assert_eq!(semester_status_message(3, false), None);
+        let first_day = 1_800_000_000i64;
+        // 未开学：剩余天数向上取整（不足一天算一天）
+        assert_eq!(
+            semester_status_message(0, true, first_day - 1, Some(first_day)).as_deref(),
+            Some("距开学还剩1天"),
+        );
+        assert_eq!(
+            semester_status_message(0, false, first_day - 86_400 * 3 - 3600, Some(first_day)).as_deref(),
+            Some("距开学还剩4天"),
+        );
+        assert_eq!(
+            semester_status_message(0, true, first_day - 86_400 * 30, Some(first_day)).as_deref(),
+            Some("距开学还剩30天"),
+        );
+        // 无开学日期时回退为文案提示
+        assert_eq!(semester_status_message(0, true, first_day, None).as_deref(), Some("还未开学"));
+        // 学期中
+        assert_eq!(
+            semester_status_message(3, true, first_day, Some(first_day)).as_deref(),
+            Some("课程结束啦 🎉"),
+        );
+        assert_eq!(semester_status_message(3, false, first_day, Some(first_day)), None);
     }
 
     #[test]
