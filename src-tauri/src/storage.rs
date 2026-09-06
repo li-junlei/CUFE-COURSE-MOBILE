@@ -1,4 +1,4 @@
-use crate::models::{AppConfig, CachedSchedule, ScheduleMetadata};
+use crate::models::{AppConfig, CachedSchedule, ScheduleMetadata, SemesterCalendarCache};
 use std::fs;
 use std::io::Write;
 use std::path::PathBuf;
@@ -257,6 +257,36 @@ impl StorageManager {
             fs::remove_file(&path)
                 .map_err(|e| format!("删除凭证文件失败: {}", e))?;
         }
+        Ok(())
+    }
+
+    /// ============================================================
+    /// 学期时间表方法（开学日期远程缓存）
+    /// ============================================================
+
+    /// 获取学期时间表缓存文件路径
+    fn semester_calendar_path(&self) -> PathBuf {
+        self.data_dir.join("semester-calendar.json")
+    }
+
+    /// 加载学期时间表缓存（缺失或损坏一律返回 None，可随时由远程重建）
+    pub fn load_semester_calendar(&self) -> Option<SemesterCalendarCache> {
+        let path = self.semester_calendar_path();
+        let content = fs::read_to_string(&path).ok()?;
+        serde_json::from_str(&content).ok()
+    }
+
+    /// 保存学期时间表缓存
+    pub fn save_semester_calendar(&self, cache: &SemesterCalendarCache) -> Result<(), String> {
+        let path = self.semester_calendar_path();
+        let content = serde_json::to_string_pretty(cache)
+            .map_err(|e| format!("序列化学期时间表失败: {}", e))?;
+
+        let mut file = fs::File::create(&path)
+            .map_err(|e| format!("创建学期时间表文件失败: {}", e))?;
+        file.write_all(content.as_bytes())
+            .map_err(|e| format!("写入学期时间表失败: {}", e))?;
+
         Ok(())
     }
 

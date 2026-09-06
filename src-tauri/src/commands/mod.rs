@@ -10,3 +10,4 @@ pub mod date;
 pub mod background;
 pub mod update;
 pub mod widget;
+pub mod semester_calendar;

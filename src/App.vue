@@ -1445,6 +1445,8 @@ onMounted(() => {
         showUpdateDialog.value = true;
       }
     }
+    // 静默拉取学期开学时间表（Rust 内部 60 天节流，任何失败不弹错）
+    invoke('fetch_semester_calendar').catch(() => {});
   }, 2000); // 延迟2秒检查，避免阻塞启动
 });
 

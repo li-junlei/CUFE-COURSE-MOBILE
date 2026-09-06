@@ -161,27 +161,10 @@ watch(() => props.modelValue, (newVal) => {
     
     // 自动生成课表名称
     scheduleName.value = `${selectedYear.value}-${selectedYear.value + 1}-${selectedTerm.value}`;
-    
-    // 自动计算第一周第一天的默认日期（学期开始日期的周一）
-    // 第一学期：9月1日所在周的周一
-    // 第二学期：2月20日所在周的周一
-    let defaultDate: Date;
-    if (selectedTerm.value === 1) {
-      // 第一学期：9月1日
-      defaultDate = new Date(selectedYear.value, 8, 1); // 9月1日 (月份从0开始)
-    } else {
-      // 第二学期：2月20日
-      defaultDate = new Date(selectedYear.value + 1, 1, 20); // 2月20日
-    }
-    
-    // 调整到该周的周一 (周一为1，周日为0)
-    const dayOfWeek = defaultDate.getDay();
-    const daysToMonday = dayOfWeek === 0 ? -6 : 1 - dayOfWeek;
-    defaultDate.setDate(defaultDate.getDate() + daysToMonday);
-    
-    // 格式化为 YYYY-MM-DD
-    firstDayDate.value = formatDateToString(defaultDate);
-    
+
+    // 计算第一周第一天默认值（时间表优先，启发式兜底）
+    refreshFirstDayDefault();
+
     loading.value = false;
   }
 });
@@ -194,9 +177,47 @@ function formatDateToString(date: Date): string {
   return `${year}-${month}-${day}`;
 }
 
-// 监听学年学期变化，更新课表名称
+// 启发式计算第一周第一天默认日期（学期开始日期的周一）
+// 第一学期：9月1日所在周的周一
+// 第二学期：2月20日所在周的周一
+function heuristicFirstDay(year: number, term: number): string {
+  let defaultDate: Date;
+  if (term === 1) {
+    // 第一学期：9月1日
+    defaultDate = new Date(year, 8, 1); // 9月1日 (月份从0开始)
+  } else {
+    // 第二学期：2月20日
+    defaultDate = new Date(year + 1, 1, 20); // 2月20日
+  }
+
+  // 调整到该周的周一 (周一为1，周日为0)
+  const dayOfWeek = defaultDate.getDay();
+  const daysToMonday = dayOfWeek === 0 ? -6 : 1 - dayOfWeek;
+  defaultDate.setDate(defaultDate.getDate() + daysToMonday);
+
+  return formatDateToString(defaultDate);
+}
+
+// 刷新第一周第一天默认值：先同步填启发式值（UI 立即有值），再查学期时间表覆盖
+async function refreshFirstDayDefault() {
+  firstDayDate.value = heuristicFirstDay(selectedYear.value, selectedTerm.value);
+  const reqYear = selectedYear.value;
+  const reqTerm = selectedTerm.value;
+  try {
+    const fromTable = await invoke<string | null>('get_semester_first_day', { year: reqYear, term: reqTerm });
+    // 结果返回时用户已切换选择则丢弃，避免竞态
+    if (fromTable && selectedYear.value === reqYear && selectedTerm.value === reqTerm) {
+      firstDayDate.value = fromTable;
+    }
+  } catch {
+    // 查询失败保留启发式值
+  }
+}
+
+// 监听学年学期变化，更新课表名称与第一周第一天默认值
 watch([selectedYear, selectedTerm], () => {
   scheduleName.value = `${selectedYear.value}-${selectedYear.value + 1}-${selectedTerm.value}`;
+  refreshFirstDayDefault();
 });
 
 const handleClose = () => {

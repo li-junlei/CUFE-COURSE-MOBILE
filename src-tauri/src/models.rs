@@ -133,6 +133,16 @@ pub struct AppConfig {
     pub close_action_minimize_to_tray: Option<bool>, // 关闭主界面时：true=最小化到托盘, false=直接退出
 }
 
+/// 学期开学时间表：学年起始年 -> { 学期(1/2) -> 第一周周一日期 "YYYY-MM-DD" }
+pub type SemesterCalendar = std::collections::HashMap<i32, std::collections::HashMap<i32, String>>;
+
+/// 远程学期时间表缓存（独立文件持久化，刻意不进 AppConfig 以避免前端整对象回写时丢失）
+#[derive(Debug, Clone, Serialize, Deserialize)]
+pub struct SemesterCalendarCache {
+    pub fetched_at: i64,           // 上次成功拉取的 Unix 秒
+    pub calendar: SemesterCalendar,
+}
+
 /// 时间段(包含开始和结束时间)
 #[derive(Debug, Clone, Serialize, Deserialize)]
 pub struct PeriodTime {

@@ -25,6 +25,7 @@ use commands::date;
 use commands::background;
 use commands::update;
 use commands::widget;
+use commands::semester_calendar;
 
 // ============== Main Entry Point ==============
 
@@ -86,6 +87,9 @@ pub fn run() {
             background::upload_background_image,
             // 更新命令
             update::check_update,
+            // 学期时间表命令
+            semester_calendar::fetch_semester_calendar,
+            semester_calendar::get_semester_first_day,
             // Widget 命令
             widget::get_widget_data,
             widget::save_widget_data,
