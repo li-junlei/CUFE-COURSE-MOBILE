@@ -1,6 +1,7 @@
 // 应用配置状态管理 Composable
 import { ref } from 'vue';
 import { invoke } from '@tauri-apps/api/core';
+import { getVersion } from '@tauri-apps/api/app';
 import { ElMessage } from 'element-plus';
 import type { AppConfig, UpdateInfo } from '../types';
 
@@ -109,9 +110,6 @@ export async function updateCardOpacity(opacity: number): Promise<void> {
   await saveAppConfig(config.value);
 }
 
-/** 当前应用版本号 */
-const CURRENT_VERSION = '2.6.0';
-
 /**
  * 检查更新
  * @param isManual true 表示手动检查（不受跳过版本限制）
@@ -121,7 +119,8 @@ export async function checkForUpdate(isManual: boolean = false): Promise<UpdateI
     const appConfig = await invoke<AppConfig>('get_app_config');
 
     const result = await invoke<UpdateInfo | null>('check_update', {
-      currentVersion: CURRENT_VERSION,
+      // 运行时从 tauri.conf.json 读取实际安装版本，避免硬编码与发版不同步
+      currentVersion: await getVersion(),
       autoCheck: !isManual,
       skippedVersion: isManual ? null : appConfig.skipped_version,
     });
