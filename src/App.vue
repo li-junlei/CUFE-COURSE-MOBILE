@@ -587,7 +587,8 @@
     <el-dialog
       v-model="showUpdateDialog"
       title="发现新版本"
-      width="420px"
+      width="90%"
+      style="max-width: 420px;"
       :close-on-click-modal="false"
       class="update-dialog"
     >
@@ -1927,6 +1928,7 @@ body {
 
 .update-actions {
   display: flex;
+  flex-wrap: wrap;
   justify-content: flex-end;
   gap: 8px;
 }
