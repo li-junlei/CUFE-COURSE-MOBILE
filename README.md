@@ -4,12 +4,14 @@
 
 ## 当前版本
 
-- `2.7.4`
+- `2.7.5`
 
 ### 本次更新
 
-- 新增学期开学时间表：导入课表时按校历自动填写「第一周第一天」默认日期，无需再手动核对
-- 修复检查更新误报：本地版本高于 GitHub 最新版本时不再提示更新
+- 新增背景图裁剪：选择背景后进入壁纸式裁剪页，拖动/双指缩放调整显示区域，叠加课表实时预览
+- 新增背景不透明度与模糊度调节，照片背景下课表文字更清晰
+- 支持保留原图重新裁剪背景；动图（GIF/动画 WebP）背景保持直接应用
+- 修复 Android 上设置背景可能失败的问题（改为跨平台字节直传）
 
 ## 主要功能
 
@@ -110,4 +112,4 @@ cd src-tauri && cargo test
 
 ## Android Release 产物
 
-- APK: `src-tauri/gen/android/app/build/outputs/apk/universal/release/cufe-course-v2.7.4-arm64-v8a-release.apk`
+- APK: `src-tauri/gen/android/app/build/outputs/apk/universal/release/cufe-course-v2.7.5-arm64-v8a-release.apk`
