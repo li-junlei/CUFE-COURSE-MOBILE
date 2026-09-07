@@ -131,6 +131,9 @@ pub struct AppConfig {
     pub auto_check_update: Option<bool>, // 自动检查更新
     pub skipped_version: Option<String>, // 跳过的版本号
     pub close_action_minimize_to_tray: Option<bool>, // 关闭主界面时：true=最小化到托盘, false=直接退出
+    pub background_opacity: Option<i32>, // 背景图不透明度 (0-100)
+    pub background_blur: Option<i32>, // 背景图模糊度 (0-30 px)
+    pub background_original: Option<String>, // 原始未裁剪背景图路径 (重新裁剪用)
 }
 
 /// 学期开学时间表：学年起始年 -> { 学期(1/2) -> 第一周周一日期 "YYYY-MM-DD" }
@@ -219,6 +222,9 @@ impl Default for AppConfig {
             auto_check_update: Some(true), // 默认开启自动检查更新
             skipped_version: None, // 默认不跳过任何版本
             close_action_minimize_to_tray: Some(true), // 默认最小化到托盘
+            background_opacity: Some(100), // 默认背景完全不透明
+            background_blur: Some(0), // 默认背景不模糊
+            background_original: None, // 默认无原图记录
         }
     }
 }

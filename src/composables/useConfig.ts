@@ -50,9 +50,13 @@ export async function saveBackgroundImage(): Promise<string | null> {
       try {
         const buffer = await file.arrayBuffer();
         const bytes = Array.from(new Uint8Array(buffer));
-        const storedPath = await invoke<string>('upload_background_image', { bytes });
-        backgroundImage.value = storedPath;
-        resolve(storedPath);
+        const result = await invoke<{ imagePath: string; originalPath: string | null }>('upload_background_image', {
+          bytes,
+          originalBytes: null,
+          originalExt: null,
+        });
+        backgroundImage.value = result.imagePath;
+        resolve(result.imagePath);
       } catch (error) {
         console.error('上传背景图失败:', error);
         resolve(null);

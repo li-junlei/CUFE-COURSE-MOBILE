@@ -123,7 +123,13 @@ export interface AppConfig {
   /** 跳过的版本号 */
   skipped_version?: string;
   /** 关闭主界面时：true=最小化到托盘, false=直接退出 */
-
+  close_action_minimize_to_tray?: boolean;
+  /** 背景图不透明度 (0-100)，透出主题底色 */
+  background_opacity?: number;
+  /** 背景图模糊度 (0-30 px) */
+  background_blur?: number;
+  /** 原始未裁剪背景图路径（重新裁剪用） */
+  background_original?: string;
 }
 
 /**

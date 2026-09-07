@@ -106,8 +106,12 @@ export async function uploadBackground(): Promise<string | null> {
       try {
         const buffer = await file.arrayBuffer();
         const bytes = Array.from(new Uint8Array(buffer));
-        const storedPath = await invoke<string>('upload_background_image', { bytes });
-        resolve(storedPath);
+        const result = await invoke<{ imagePath: string; originalPath: string | null }>('upload_background_image', {
+          bytes,
+          originalBytes: null,
+          originalExt: null,
+        });
+        resolve(result.imagePath);
       } catch (error) {
         console.error('上传背景图失败:', error);
         resolve(null);

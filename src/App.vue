@@ -1,6 +1,8 @@
 <template>
   <el-config-provider :locale="zhCn">
-  <div id="app" :style="{ backgroundImage: backgroundImage ? `url(${backgroundImage})` : 'none' }">
+  <div id="app">
+    <!-- 统一背景层：透明度/模糊度只作用于此层，透出 #app 底色 -->
+    <div v-if="backgroundImage" class="app-background" :style="backgroundLayerStyle"></div>
     <!-- 自定义导航栏 -->
     <div class="navbar">
       <div class="navbar-left" @click="showPopup = !showPopup">
@@ -162,6 +164,16 @@
             </div>
           </div>
 
+          <div class="appearance-item" :class="{ disabled: !backgroundImage || isGifBackground }" @click="backgroundImage && !isGifBackground && handleRecropBackground()">
+            <div class="item-preview">
+               <el-icon :size="32"><Scissor /></el-icon>
+            </div>
+            <div class="item-info">
+              <div class="item-title">重新裁剪背景</div>
+              <div class="item-desc">调整背景显示区域</div>
+            </div>
+          </div>
+
           <!-- 网格辅助线开关 -->
           <div class="appearance-item switch-item" style="cursor: default;">
             <div class="item-preview switch-preview">
@@ -258,6 +270,52 @@
                   :max="100"
                   :step="5"
                   @change="handleCardOpacityChange"
+                  :show-tooltip="false"
+                  style="width: 100%;"
+                />
+              </div>
+            </div>
+          </div>
+
+          <!-- 背景不透明度 -->
+          <div class="appearance-item slider-item" :class="{ disabled: !backgroundImage }" style="cursor: default;">
+            <div class="item-preview slider-preview">
+               <el-icon :size="32"><Picture /></el-icon>
+            </div>
+            <div class="item-info">
+              <div class="item-title">背景不透明度</div>
+              <div class="item-desc">{{ config.background_opacity }}%</div>
+              <div class="item-control">
+                <el-slider
+                  v-model.number="config.background_opacity"
+                  :min="0"
+                  :max="100"
+                  :step="5"
+                  :disabled="!backgroundImage"
+                  @change="handleBackgroundStyleChange"
+                  :show-tooltip="false"
+                  style="width: 100%;"
+                />
+              </div>
+            </div>
+          </div>
+
+          <!-- 背景模糊度 -->
+          <div class="appearance-item slider-item" :class="{ disabled: !backgroundImage }" style="cursor: default;">
+            <div class="item-preview slider-preview">
+               <el-icon :size="32"><MagicStick /></el-icon>
+            </div>
+            <div class="item-info">
+              <div class="item-title">背景模糊度</div>
+              <div class="item-desc">{{ config.background_blur }}px</div>
+              <div class="item-control">
+                <el-slider
+                  v-model.number="config.background_blur"
+                  :min="0"
+                  :max="30"
+                  :step="1"
+                  :disabled="!backgroundImage"
+                  @change="handleBackgroundStyleChange"
                   :show-tooltip="false"
                   style="width: 100%;"
                 />
@@ -502,7 +560,7 @@
         :week="currentWeek"
         :end-week="currentSemesterWeeks"
         :colors="courseColors"
-        :bg-image="backgroundImage"
+        bg-image=""
         :max-periods="currentMaxPeriods"
         :period-times="currentPeriodTimes"
         :show-grid-lines="config.show_grid_lines"
@@ -583,6 +641,28 @@
       @logout="handleLogout"
     />
 
+    <!-- 背景裁剪器 -->
+    <BackgroundCropper
+      v-if="cropperSession"
+      :src="cropperSession.src"
+      :ratio="cropperSession.ratio"
+      :initial-opacity="config.background_opacity ?? 100"
+      :initial-blur="config.background_blur ?? 0"
+      :preview-courses="courses"
+      :preview-week="currentWeek"
+      :preview-end-week="currentSemesterWeeks"
+      :preview-colors="courseColors"
+      :preview-max-periods="currentMaxPeriods"
+      :preview-period-times="currentPeriodTimes"
+      :preview-show-grid-lines="config.show_grid_lines ?? false"
+      :preview-card-opacity="config.card_opacity ?? 95"
+      :preview-show-teacher="config.show_teacher ?? true"
+      :preview-show-location="config.show_location ?? true"
+      :preview-simplified-location="config.simplified_location ?? false"
+      @cancel="closeCropper"
+      @confirm="handleCropperConfirm"
+    />
+
     <!-- 更新提示对话框 -->
     <el-dialog
       v-model="showUpdateDialog"
@@ -614,10 +694,10 @@
 import { ref, onMounted, onUnmounted, computed, watch } from 'vue';
 import { ElMessage, ElConfigProvider } from 'element-plus';
 import zhCn from 'element-plus/es/locale/lang/zh-cn';
-import { MoreFilled, ArrowDown, Loading, Plus, Picture, Delete, Close, Calendar, Collection, Upload, Timer, User, Location, Edit, Check, Grid, View, Refresh, DocumentChecked, Download, FolderOpened } from '@element-plus/icons-vue';
+import { MoreFilled, ArrowDown, Loading, Plus, Picture, Delete, Close, Calendar, Collection, Upload, Timer, User, Location, Edit, Check, Grid, View, Refresh, DocumentChecked, Download, FolderOpened, Scissor, MagicStick } from '@element-plus/icons-vue';
 import { invoke } from '@tauri-apps/api/core';
 import { localDataDir } from '@tauri-apps/api/path';
-import { open as openDialog, save as saveDialog } from '@tauri-apps/plugin-dialog';
+import { save as saveDialog } from '@tauri-apps/plugin-dialog';
 import { openUrl } from '@tauri-apps/plugin-opener';
 import { readFile } from '@tauri-apps/plugin-fs';
 import VueDraggable from 'vuedraggable';
@@ -635,6 +715,7 @@ import CourseGrid from './components/CourseGrid.vue';
 import ScheduleEditDialog from './components/ScheduleEditDialog.vue';
 import ImportScheduleDialog from './components/ImportScheduleDialog.vue';
 import UserProfileDialog from './components/UserProfileDialog.vue';
+import BackgroundCropper from './components/BackgroundCropper.vue';
 import type { AppConfig, ScheduleMetadata, UserInfo, ScheduleDiff, Course, UpdateInfo, TimeTable } from './types';
 
 // 从 composables 导入状态和方法
@@ -1124,41 +1205,195 @@ async function handleImportExams(schedule: ScheduleMetadata) {
   }
 }
 
-// 确认导入课表
+// ===== 背景图裁剪与透明度/模糊度 =====
+
+/** 背景上传结果（Rust BackgroundUploadResult） */
+interface BackgroundUploadResult {
+  imagePath: string;
+  originalPath: string | null;
+}
+
+/** 裁剪会话：source 为原图字节（新选图或重裁读出） */
+interface CropperSession {
+  src: string;
+  source: Uint8Array;
+  sourceExt: string;
+  ratio: number;
+}
+
+const cropperSession = ref<CropperSession | null>(null);
+
+/** 统一背景层样式：透明度/模糊度只作用于该层，动态外扩抵消 blur 边缘晕染 */
+const backgroundLayerStyle = computed(() => {
+  const blur = config.value.background_blur ?? 0;
+  const inset = Math.max(10, blur * 3 + 10);
+  return {
+    backgroundImage: `url(${backgroundImage.value})`,
+    inset: `${-inset}px`,
+    opacity: (config.value.background_opacity ?? 100) / 100,
+    filter: blur > 0 ? `blur(${blur}px)` : 'none',
+  };
+});
+
+/** GIF 背景不支持重裁（canvas 裁剪会丢动画），动图 WebP 在读取时字节嗅探兜底 */
+const isGifBackground = computed(() =>
+  (config.value.background_original || config.value.background_image || '').toLowerCase().endsWith('.gif')
+);
+
+/** HTML file input 选图（跨平台一致，Android 上走系统选择器） */
+function pickImageFile(): Promise<File | null> {
+  return new Promise(resolve => {
+    const input = document.createElement('input');
+    input.type = 'file';
+    input.accept = 'image/jpeg,image/png,image/webp,image/gif';
+    input.onchange = event => {
+      resolve((event.target as HTMLInputElement).files?.[0] ?? null);
+    };
+    input.click();
+  });
+}
+
+/** 动图检测：GIF magic 或 WebP 的 ANIM chunk（扫描前 64KB，字节匹配避免 TextDecoder 兼容性问题） */
+function isAnimatedImage(bytes: Uint8Array, mime = ''): boolean {
+  if (mime === 'image/gif') return true;
+  if (bytes[0] === 0x47 && bytes[1] === 0x49 && bytes[2] === 0x46) return true; // "GIF"
+  const limit = Math.min(bytes.length, 65536);
+  const needle = [0x41, 0x4e, 0x49, 0x4d]; // "ANIM"
+  outer: for (let i = 0; i <= limit - 4; i++) {
+    for (let j = 0; j < 4; j++) {
+      if (bytes[i + j] !== needle[j]) continue outer;
+    }
+    return true;
+  }
+  return false;
+}
+
+/** 读取背景文件（绝对路径优先，纯文件名回退 backgrounds 目录） */
+async function readBackgroundFile(pathOrName: string): Promise<Uint8Array> {
+  try {
+    return await readFile(pathOrName);
+  } catch {
+    if (!pathOrName.includes('/') && !pathOrName.includes('\\')) {
+      const fallbackPath = `${await localDataDir()}cufe-course/backgrounds/${pathOrName}`;
+      return await readFile(fallbackPath);
+    }
+    throw new Error('读取背景文件失败');
+  }
+}
+
+function extToMime(ext: string): string {
+  return ext === 'jpg' ? 'image/jpeg' : `image/${ext}`;
+}
+
+function bytesToDataUrl(bytes: Uint8Array, mime: string): Promise<string> {
+  return new Promise((resolve, reject) => {
+    const reader = new FileReader();
+    reader.onload = () => resolve(reader.result as string);
+    reader.onerror = () => reject(new Error('图片编码失败'));
+    reader.readAsDataURL(new Blob([bytes], { type: mime }));
+  });
+}
+
+/** 打开裁剪页，比例取当前视口宽高比 */
+function openCropper(src: string, source: Uint8Array, sourceExt: string) {
+  showAppearanceDialog.value = false;
+  cropperSession.value = { src, source, sourceExt, ratio: window.innerWidth / window.innerHeight };
+}
+
+function closeCropper() {
+  if (cropperSession.value) {
+    URL.revokeObjectURL(cropperSession.value.src);
+  }
+  cropperSession.value = null;
+}
+
+/** 更新背景为上传结果并持久化（save 必须在 upload 之后，整对象回写） */
+async function applyBackground(res: BackgroundUploadResult, opacity: number, blur: number, dataUrl: string) {
+  config.value.background_image = res.imagePath;
+  config.value.background_original = res.originalPath ?? undefined;
+  config.value.background_opacity = opacity;
+  config.value.background_blur = blur;
+  await invoke('save_app_config', { config: config.value });
+  backgroundImage.value = dataUrl;
+  closeCropper();
+  ElMessage.success('背景设置成功');
+}
+
+// 选择并上传背景图（静态图进裁剪页，动图直传保留动画）
 async function handleUploadBackground() {
   showPopup.value = false;
-  
-  try {
-    const selected = await openDialog({
-      multiple: false,
-      filters: [{
-        name: '图片',
-        extensions: ['png', 'jpg', 'jpeg', 'gif', 'webp']
-      }]
-    });
 
-    if (selected) {
-      // 读取图片文件并转换为base64
-      const fileData = await readFile(selected as string);
-      const base64 = btoa(
-        new Uint8Array(fileData).reduce((data, byte) => data + String.fromCharCode(byte), '')
-      );
-      
-      // 获取文件扩展名
-      const ext = (selected as string).split('.').pop()?.toLowerCase() || 'png';
-      const mimeType = ext === 'jpg' ? 'image/jpeg' : `image/${ext}`;
-      
-      backgroundImage.value = `data:${mimeType};base64,${base64}`;
-      
-      // 保存配置
-      const savedPath = await invoke<string>('save_background_image', { sourcePath: selected });
-      config.value.background_image = savedPath;
-      
-      ElMessage.success('背景设置成功');
+  try {
+    const file = await pickImageFile();
+    if (!file) return;
+
+    const bytes = new Uint8Array(await file.arrayBuffer());
+    const ext = (file.name.split('.').pop() || 'jpg').toLowerCase();
+
+    if (isAnimatedImage(bytes, file.type)) {
+      // 动图经 canvas 裁剪会丢动画，直接保存原图
+      const res = await invoke<BackgroundUploadResult>('upload_background_image', {
+        bytes: Array.from(bytes),
+        originalBytes: null,
+        originalExt: null,
+      });
+      await applyBackground(res, config.value.background_opacity ?? 100, config.value.background_blur ?? 0,
+        await bytesToDataUrl(bytes, file.type || 'image/gif'));
+      return;
     }
+
+    openCropper(URL.createObjectURL(new Blob([bytes], { type: file.type || 'image/png' })), bytes, ext);
   } catch (e) {
     console.error('选择背景失败:', e);
     ElMessage.error(`设置背景失败: ${e}`);
+  }
+}
+
+// 重新裁剪当前背景（无原图记录时现有图即原图）
+async function handleRecropBackground() {
+  if (!backgroundImage.value) return;
+  showPopup.value = false;
+
+  const target = config.value.background_original || config.value.background_image!;
+  try {
+    const bytes = await readBackgroundFile(target);
+    if (isAnimatedImage(bytes)) {
+      ElMessage.warning('动态图片背景不支持重新裁剪');
+      return;
+    }
+    const ext = (target.split('.').pop() || 'jpg').toLowerCase();
+    openCropper(URL.createObjectURL(new Blob([bytes])), bytes, ext);
+  } catch (e) {
+    console.error('读取原图失败:', e);
+    ElMessage.error(`读取原图失败: ${e}`);
+  }
+}
+
+// 裁剪页确认：原图与裁剪结果一起重写，重裁无累积质量损失
+async function handleCropperConfirm(payload: { blobBytes: Uint8Array; opacity: number; blur: number }) {
+  const session = cropperSession.value;
+  if (!session) return;
+
+  try {
+    const res = await invoke<BackgroundUploadResult>('upload_background_image', {
+      bytes: Array.from(payload.blobBytes),
+      originalBytes: Array.from(session.source),
+      originalExt: session.sourceExt,
+    });
+    await applyBackground(res, payload.opacity, payload.blur,
+      await bytesToDataUrl(payload.blobBytes, 'image/jpeg'));
+  } catch (e) {
+    console.error('保存背景失败:', e);
+    ElMessage.error(`保存背景失败: ${e}`);
+  }
+}
+
+// 背景透明度/模糊度滑块保存
+async function handleBackgroundStyleChange() {
+  try {
+    await invoke('save_app_config', { config: config.value });
+  } catch {
+    ElMessage.error('保存设置失败');
   }
 }
 
@@ -1169,6 +1404,7 @@ async function handleDeleteBackground() {
   try {
     await invoke('delete_background_image');
     config.value.background_image = undefined;
+    config.value.background_original = undefined;
     backgroundImage.value = '';
     ElMessage.success('背景已删除');
   } catch (e) {
@@ -1324,6 +1560,8 @@ async function loadConfig() {
       reminder_enabled: appConfig.reminder_enabled ?? false,
       reminder_debug_logging: appConfig.reminder_debug_logging ?? false,
       auto_check_update: appConfig.auto_check_update ?? true,
+      background_opacity: appConfig.background_opacity ?? 100,
+      background_blur: appConfig.background_blur ?? 0,
 
     };
 
@@ -1337,26 +1575,10 @@ async function loadConfig() {
     // 加载背景图
     if (config.value.background_image) {
       try {
-        let imagePath = config.value.background_image;
-        let fileData: Uint8Array;
-        try {
-          fileData = await readFile(imagePath);
-        } catch {
-          if (!imagePath.includes('/') && !imagePath.includes('\\')) {
-            const fallbackPath = `${await localDataDir()}cufe-course/backgrounds/${imagePath}`;
-            fileData = await readFile(fallbackPath);
-            imagePath = fallbackPath;
-            config.value.background_image = fallbackPath;
-          } else {
-            throw new Error('读取背景文件失败');
-          }
-        }
-        const base64 = btoa(
-          new Uint8Array(fileData).reduce((data, byte) => data + String.fromCharCode(byte), '')
-        );
+        const imagePath = config.value.background_image;
+        const fileData = await readBackgroundFile(imagePath);
         const ext = imagePath.split('.').pop()?.toLowerCase() || 'png';
-        const mimeType = ext === 'jpg' ? 'image/jpeg' : `image/${ext}`;
-        backgroundImage.value = `data:${mimeType};base64,${base64}`;
+        backgroundImage.value = await bytesToDataUrl(fileData, extToMime(ext));
       } catch (e) {
         console.error('加载背景图失败:', e);
       }
@@ -1612,10 +1834,20 @@ body {
   width: 100vw;
   height: 100vh;
   overflow: hidden;
+  position: relative;
   background-color: var(--bg-color);
+  transition: background-color 0.3s ease;
+}
+
+/* 统一背景层：z-index -1 绘制于 #app 底色之上、普通流内容之下 */
+.app-background {
+  position: absolute;
+  z-index: -1;
   background-size: cover;
   background-position: center;
-  transition: background-color 0.3s ease;
+  background-repeat: no-repeat;
+  pointer-events: none;
+  transition: opacity 0.25s ease, filter 0.25s ease;
 }
 
 /* 导航栏 - 浮动极简风格 */
@@ -2284,6 +2516,10 @@ html.dark .custom-input .el-input__wrapper.is-focus {
   transform: translateY(-3px);
   border-color: var(--primary-color);
   box-shadow: var(--shadow-md);
+}
+
+.appearance-item.disabled {
+  opacity: 0.5;
 }
 
 .item-preview {
