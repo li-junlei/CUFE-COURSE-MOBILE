@@ -1835,6 +1835,9 @@ body {
   height: 100vh;
   overflow: hidden;
   position: relative;
+  /* 自成层叠上下文：让负 z-index 背景层画在 #app 底色之上、内容之下
+     （否则它参与根层叠上下文，会被 #app 自身的 background-color 盖住） */
+  isolation: isolate;
   background-color: var(--bg-color);
   transition: background-color 0.3s ease;
 }

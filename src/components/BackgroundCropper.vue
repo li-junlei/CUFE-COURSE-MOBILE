@@ -11,8 +11,13 @@
 
     <!-- 裁剪舞台：按屏幕比例放置固定框 -->
     <div class="cropper-stage" ref="stageRef">
-      <div class="cropper-frame" ref="frameRef">
+      <div class="cropper-frame" ref="frameRef" :style="frameStyleVars">
         <img ref="imgRef" :src="src" alt="" />
+        <!-- 透明度/模糊度实时预览层：backdrop 模糊 + 底色 tint，不拦截手势 -->
+        <div class="preview-effect" aria-hidden="true">
+          <div class="effect-blur"></div>
+          <div class="effect-tint"></div>
+        </div>
         <!-- 真实课表叠加预览 -->
         <div v-if="showPreview" class="preview-overlay">
           <CourseGrid
@@ -66,7 +71,7 @@
 </template>
 
 <script setup lang="ts">
-import { ref, onMounted, onUnmounted } from 'vue';
+import { ref, computed, onMounted, onUnmounted } from 'vue';
 import Cropper from 'cropperjs';
 import 'cropperjs/dist/cropper.css';
 import { ElMessage } from 'element-plus';
@@ -108,7 +113,20 @@ const blur = ref(props.initialBlur);
 const showPreview = ref(true);
 const saving = ref(false);
 
+/** 滑块实时预览：效果公式与主界面背景层一致（image·X + 底色·(1-X)） */
+const frameStyleVars = computed(() => ({
+  '--preview-blur': `${blur.value}px`,
+  '--preview-tint': String(1 - opacity.value / 100),
+}));
+
 let cropper: Cropper | null = null;
+
+/** 强制裁剪框铺满容器（壁纸式固定框），viewMode 3 下不会被钳制缩小 */
+function forceFullCropBox() {
+  if (!cropper) return;
+  const cd = cropper.getContainerData();
+  cropper.setCropBoxData({ left: 0, top: 0, width: cd.width, height: cd.height });
+}
 
 /** 按屏幕比例在舞台内取最大矩形（JS 计算，兼容不支持 aspect-ratio 的旧 WebView） */
 function fitFrame() {
@@ -125,20 +143,27 @@ function fitFrame() {
   }
   frame.style.width = `${Math.floor(w)}px`;
   frame.style.height = `${Math.floor(h)}px`;
+  // cropperjs 自身的 resize 处理先跑，下一帧再把框强制回满容器
+  if (cropper) {
+    requestAnimationFrame(forceFullCropBox);
+  }
 }
 
 onMounted(() => {
   fitFrame();
   cropper = new Cropper(imgRef.value!, {
     aspectRatio: props.ratio,
-    viewMode: 1,
+    // viewMode 3: 画布始终铺满容器（缩不小于容器、拖动不露缝），即壁纸语义
+    viewMode: 3,
     dragMode: 'move',
     autoCropArea: 1,
+    restore: false,
     cropBoxMovable: false,
     cropBoxResizable: false,
     toggleDragModeOnDblclick: false,
     zoomOnWheel: false,
     background: false,
+    ready: forceFullCropBox,
   });
   window.addEventListener('resize', fitFrame);
 });
@@ -153,7 +178,7 @@ async function handleConfirm() {
   if (saving.value || !cropper) return;
   saving.value = true;
   try {
-    // 输出分辨率：视口物理像素，最长边上限 2160
+    // 输出分辨率：视口物理像素，最长边上限 2160（显式 width/height 保证小图也按屏幕分辨率导出）
     let outW = Math.min(Math.round(window.innerWidth * window.devicePixelRatio), 2160);
     let outH = Math.round(outW / props.ratio);
     if (outH > 2160) {
@@ -162,8 +187,8 @@ async function handleConfirm() {
     }
 
     const canvas = cropper.getCroppedCanvas({
-      maxWidth: outW,
-      maxHeight: outH,
+      width: outW,
+      height: outH,
       fillColor: '#ffffff',
       imageSmoothingQuality: 'high',
     });
@@ -249,11 +274,32 @@ async function handleConfirm() {
   overflow: hidden;
 }
 
-/* cropperjs 接管渲染后隐藏原图 */
+/* cropperjs 初始化后自行隐藏原图（cropper-hidden） */
 .cropper-frame img {
   display: block;
   max-width: 100%;
-  opacity: 0;
+}
+
+/* 实时预览效果层：模糊作用于背景（backdrop），tint 用底色按 (1-不透明度) 淡化 */
+.preview-effect {
+  position: absolute;
+  inset: 0;
+  z-index: 4;
+  pointer-events: none;
+}
+
+.effect-blur {
+  position: absolute;
+  inset: 0;
+  backdrop-filter: blur(var(--preview-blur, 0px));
+  -webkit-backdrop-filter: blur(var(--preview-blur, 0px));
+}
+
+.effect-tint {
+  position: absolute;
+  inset: 0;
+  background: var(--bg-color);
+  opacity: var(--preview-tint, 0);
 }
 
 /* 课表叠加预览层：不拦截手势 */
