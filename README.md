@@ -4,14 +4,15 @@
 
 ## 当前版本
 
-- `2.7.5`
+- `2.7.6`
 
 ### 本次更新
 
-- 新增背景图裁剪：选择背景后进入壁纸式裁剪页，拖动/双指缩放调整显示区域，叠加课表实时预览
-- 新增背景不透明度与模糊度调节，照片背景下课表文字更清晰
-- 支持保留原图重新裁剪背景；动图（GIF/动画 WebP）背景保持直接应用
-- 修复 Android 上设置背景可能失败的问题（改为跨平台字节直传）
+- 修复自定义背景重启后丢失：背景改由 Rust 端直接读写，绕开 Android 上文件系统插件的路径限制
+- 修复课表偶发空白：移除课表数据 30 天过期拦截，本地课表始终正常显示（与桌面小部件行为一致）
+- 课表加载失败时明确提示原因，切换课表失败不再误报"切换成功"
+- 配置文件改为原子写入，避免应用被系统杀死导致设置丢失
+- 动图背景保留原始格式后缀，重启后正常播放动画
 
 ## 主要功能
 
@@ -112,4 +113,4 @@ cd src-tauri && cargo test
 
 ## Android Release 产物
 
-- APK: `src-tauri/gen/android/app/build/outputs/apk/universal/release/cufe-course-v2.7.5-arm64-v8a-release.apk`
+- APK: `src-tauri/gen/android/app/build/outputs/apk/universal/release/cufe-course-v2.7.6-arm64-v8a-release.apk`
