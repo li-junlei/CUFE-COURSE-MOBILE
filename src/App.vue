@@ -75,6 +75,7 @@
           <div class="setting-hint">
             情况A：无紧邻前序课程 → 课程开始前15分钟提醒<br>
             情况B：有紧邻前序课程 → 上一节课结束前3分钟提醒
+            <br>Android 会预先安排系统通知，锁屏或退出应用后仍可提醒。请允许通知，并在系统设置中允许本应用的「闹钟和提醒」，以保证准时提醒。
           </div>
           <div class="setting-hint" v-if="reminderEnabled && reminderDebugLogging">
             调试日志将输出到开发者控制台（F12）以便排查提醒触发时机
@@ -797,11 +798,13 @@ const currentPeriodTimes = computed(() => {
 
 const reminderTimeTables = computed<TimeTable[]>(() => {
   if (activeTimeTable.value) return [activeTimeTable.value];
-  if (config.value.time_tables && config.value.time_tables.length > 0) {
-    return [config.value.time_tables[0]];
+  if (config.value.period_times?.length) {
+    return [{ id: 'legacy', name: '默认时间表', periods: config.value.period_times }];
   }
   return [];
 });
+
+const reminderFirstDay = computed(() => activeSchedule.value?.first_day ?? config.value.first_day);
 
 const weekDays = ['周一', '周二', '周三', '周四', '周五', '周六', '周日'];
 
@@ -1691,7 +1694,7 @@ watch(
 );
 
 watch(
-  [reminderEnabled, reminderDebugLogging, courses, reminderTimeTables, currentWeek],
+  [reminderEnabled, reminderDebugLogging, courses, reminderTimeTables, reminderFirstDay, currentSemesterWeeks, currentScheduleId],
   () => {
     const canRun =
       reminderEnabled.value &&
@@ -1699,26 +1702,15 @@ watch(
       reminderTimeTables.value.length > 0;
 
     if (!canRun) {
-      stopReminderService();
+      void stopReminderService();
       return;
     }
 
-    if (!config.value.reminded_courses) {
-      config.value.reminded_courses = {};
-    }
-
-    stopReminderService();
-    startReminderService(
+    void startReminderService(
       courses.value,
       reminderTimeTables.value,
-      currentWeek.value,
-      (key: string) => {
-        if (!config.value.reminded_courses) {
-          config.value.reminded_courses = {};
-        }
-        config.value.reminded_courses[key] = Date.now();
-      },
-      config.value.reminded_courses,
+      reminderFirstDay.value,
+      currentSemesterWeeks.value,
       reminderDebugLogging.value
     );
   },

@@ -1,250 +1,126 @@
 import { ref, onUnmounted } from 'vue';
-import type { Course, TimeTable, PeriodTime } from '../types';
-import { isPermissionGranted, requestPermission, sendNotification } from '@tauri-apps/plugin-notification';
+import { invoke } from '@tauri-apps/api/core';
+import type { Course, TimeTable } from '../types';
+import { cancel, pending, createChannel, Importance, Schedule, type Options } from '@tauri-apps/plugin-notification';
 import { ElMessage } from 'element-plus';
+import { buildReminderPlan, REMINDER_ID_BASE, REMINDER_ID_LIMIT } from '../utils/reminderPlan';
 
-/**
- * 提醒服务 Composable
- * 情况A（无紧邻前序课程）：如果当前课程的上一节次没有课，则在当前课程开始前15分钟触发提醒
- * 情况B（有紧邻前序课程）：如果当前课程的上一节次有课（即连续上课），则在上一节课结束前3分钟触发提醒
- */
+const CHANNEL_ID = 'course-reminders';
+const isAndroid = () => /Android/i.test(navigator.userAgent);
+
 export function useReminder() {
-  const reminderTimer = ref<number | null>(null);
   const isRunning = ref(false);
+  let timer: number | undefined;
+  let revision = 0;
+  let work = Promise.resolve();
 
-  // 解析时间字符串为 Date 对象（使用今天作为基准）
-  function parseTimeToDate(timeStr: string): Date {
-    const [hours, minutes] = timeStr.split(':').map(Number);
-    const date = new Date();
-    date.setHours(hours, minutes, 0, 0);
-    return date;
+  async function prepareNotifications(): Promise<boolean> {
+    // Await the native command so delivery failures reach the caller.
+    let granted = await invoke<boolean | null>('plugin:notification|is_permission_granted');
+    if (!granted) {
+      granted = await invoke<string>('plugin:notification|request_permission') === 'granted';
+    }
+    if (!granted) {
+      ElMessage.warning('通知权限未授予，请到系统设置中开启通知权限。');
+      return false;
+    }
+    if (isAndroid()) {
+      await createChannel({ id: CHANNEL_ID, name: '上课提醒', importance: Importance.High, vibration: true });
+    }
+    return true;
   }
 
-  // 查找今天的课程
-  function getTodayCourses(courses: Course[], currentWeek: number): Course[] {
-    const now = new Date();
-    const dayOfWeek = now.getDay() === 0 ? 7 : now.getDay(); // 1-7
-
-    return courses.filter(course => {
-      // 检查星期几
-      if (course.dayOfWeek !== dayOfWeek) return false;
-
-      // 检查当前周是否在课程周次范围内
-      // weeks 为精确周次列表（后端已按 weekType 过滤单/双周），统一用 includes 判定
-      if (!course.weeks.includes(currentWeek)) return false;
-
-      return true;
+  async function notify(options: Options): Promise<void> {
+    await invoke('plugin:notification|notify', {
+      options: { ...options, ...(isAndroid() ? { channelId: CHANNEL_ID } : {}) }
     });
   }
 
-  // 生成课程唯一键（用于防止重复提醒）
-  function getCourseKey(course: Course, _dayOffset: number = 0): string {
-    const date = new Date();
-    const dayOfWeek = date.getDay() === 0 ? 7 : date.getDay();
-    return `${dayOfWeek}_${course.periods[0]}_${course.periods[1]}`;
+  function clearTimer() {
+    if (timer !== undefined) window.clearInterval(timer);
+    timer = undefined;
+    isRunning.value = false;
   }
 
-  // 发送通知
-  async function sendCourseNotification(course: Course, periodTime: PeriodTime): Promise<boolean> {
-    try {
-      // 检查通知权限
-      let permissionGranted = await isPermissionGranted();
-      if (!permissionGranted) {
-        const permission = await requestPermission();
-        permissionGranted = permission === 'granted';
-      }
-
-      if (!permissionGranted) {
-        ElMessage.warning('通知权限未授予，请到系统设置中开启通知权限。');
-        return false;
-      }
-
-      // 发送通知
-      await sendNotification({
-        title: '上课提醒',
-        body: `课程: ${course.name}\n地点: ${course.location}\n时间: ${periodTime.start} - ${periodTime.end}`
-      });
-
-      return true;
-    } catch (error) {
-      console.error('发送通知失败:', error);
-      return false;
-    }
+  // Serialize mutations so a slow permission prompt cannot restore an obsolete plan.
+  function queueUpdate(task: (version: number) => Promise<void>) {
+    const version = ++revision;
+    clearTimer();
+    work = work.then(async () => {
+      if (version === revision) await task(version);
+    }).catch(error => {
+      console.error('更新上课提醒失败:', error);
+      ElMessage.error(`更新上课提醒失败: ${String(error)}`);
+    });
+    return work;
   }
 
-  // 检查并发送提醒
-  async function checkAndNotify(
-    courses: Course[],
-    timeTables: TimeTable[],
-    currentWeek: number,
-    _remindedCourses: Record<string, number> = {},
-    onReminded?: (_key: string) => void,
-    debugLogging: boolean = false
+  async function cancelCourseReminders() {
+    if (!isAndroid()) return;
+    const ids = (await pending()).filter(item =>
+      item.id >= REMINDER_ID_BASE && item.id < REMINDER_ID_LIMIT
+    ).map(item => item.id);
+    if (ids.length) await cancel(ids);
+  }
+
+  function startReminderService(
+    courses: Course[], timeTables: TimeTable[], firstDay: number | undefined,
+    weeksCount: number, debugLogging = false
   ): Promise<void> {
-    if (!timeTables.length || !timeTables[0]?.periods?.length) return;
-
-    const now = new Date();
-    const currentTime = now.getHours() * 60 + now.getMinutes();
-    if (debugLogging) {
-      console.log('[提醒调试] 检查触发窗口:', {
-        currentWeek,
-        currentTime,
-        courseCount: courses.length
-      });
-    }
-
-    // 获取今天的课程
-    const todayCourses = getTodayCourses(courses, currentWeek);
-    if (todayCourses.length === 0) return;
-
-    // 情况A: 检查即将开始的课程（无前序课程）- 开始前15分钟
-    for (const course of todayCourses) {
-      const periodIndex = course.periods[0] - 1;
-      if (periodIndex < 0 || periodIndex >= timeTables[0].periods.length) continue;
-
-      const periodTime = timeTables[0].periods[periodIndex];
-      const startTime = parseTimeToDate(periodTime.start);
-      const startMinutes = startTime.getHours() * 60 + startTime.getMinutes();
-
-      // 计算提醒时间（开始前15分钟）
-      const reminderMinutes = startMinutes - 15;
-      const key = getCourseKey(course);
-
-      // 检查是否已提醒过（5分钟内不重复提醒）
-      // eslint-disable-next-line @typescript-eslint/no-unused-vars
-      const lastReminded = _remindedCourses[key] || 0;
-      if (now.getTime() - lastReminded < 5 * 60 * 1000) continue;
-
-      // 检查是否在提醒时间窗口内（前后1分钟误差）
-      if (Math.abs(currentTime - reminderMinutes) <= 1) {
-        // 检查是否有紧邻的前序课程
-        const hasPrevious = todayCourses.some(c =>
-          c.periods[1] === course.periods[0] - 1
-        );
-
-        if (!hasPrevious) {
-          // 情况A：无紧邻前序课程
-          console.log('[提醒服务] 发送情况A提醒:', course.name);
-          const sent = await sendCourseNotification(course, periodTime);
-          if (sent) {
-            _remindedCourses[key] = now.getTime();
-            onReminded?.(key);
-            if (debugLogging) {
-              console.log('[提醒调试] 情况A已触发:', { key, course: course.name });
+    return queueUpdate(async version => {
+      await cancelCourseReminders();
+      if (version !== revision || !await prepareNotifications() || version !== revision) return;
+      if (!firstDay) {
+        ElMessage.warning('请先在课表设置中填写第一周第一天，才能安排上课提醒。');
+        return;
+      }
+      const plan = buildReminderPlan(courses, timeTables[0]?.periods ?? [], firstDay, weeksCount);
+      if (debugLogging) console.log('[上课提醒] 按实际日期安排:', plan);
+      if (isAndroid()) {
+        for (const item of plan) {
+          if (version !== revision) return;
+          if (item.at.getTime() <= Date.now()) continue;
+          await notify({ id: item.id, title: '上课提醒', body: item.body,
+            schedule: Schedule.at(item.at, false, true) });
+        }
+      } else {
+        const check = async () => {
+          while (plan.length && plan[0].at.getTime() <= Date.now()) {
+            const item = plan.shift()!;
+            if (item.start.getTime() > Date.now()) {
+              await notify({ id: item.id, title: '上课提醒', body: item.body });
             }
           }
-        }
+        };
+        timer = window.setInterval(() => {
+          void check().catch(error => console.error('发送上课提醒失败:', error));
+        }, 1000);
       }
-    }
-
-    // 情况B: 检查即将结束的课程（有后续紧邻课程）- 结束前3分钟
-    for (const course of todayCourses) {
-      // 查找是否有后续紧邻课程
-      const hasNext = todayCourses.some(c =>
-        c.periods[0] === course.periods[1] + 1
-      );
-
-      if (!hasNext) continue;
-
-      const periodIndex = course.periods[1] - 1;
-      if (periodIndex < 0 || periodIndex >= timeTables[0].periods.length) continue;
-
-      const periodTime = timeTables[0].periods[periodIndex];
-      const endTime = parseTimeToDate(periodTime.end);
-      const endMinutes = endTime.getHours() * 60 + endTime.getMinutes();
-
-      // 计算提醒时间（结束前3分钟）
-      const reminderMinutes = endMinutes - 3;
-      const key = getCourseKey(course);
-
-      // 检查是否已提醒过
-      // eslint-disable-next-line @typescript-eslint/no-unused-vars
-      const lastReminded = _remindedCourses[key] || 0;
-      if (now.getTime() - lastReminded < 5 * 60 * 1000) continue;
-
-      // 检查是否在提醒时间窗口内
-      if (Math.abs(currentTime - reminderMinutes) <= 1) {
-        console.log('[提醒服务] 发送情况B提醒:', course.name);
-        const sent = await sendCourseNotification(course, periodTime);
-        if (sent) {
-          _remindedCourses[key] = now.getTime();
-          onReminded?.(key);
-          if (debugLogging) {
-            console.log('[提醒调试] 情况B已触发:', { key, course: course.name });
-          }
-        }
-      }
-    }
+      isRunning.value = true;
+    });
   }
 
-  // 启动提醒服务
-  function startReminderService(
-    courses: Course[],
-    timeTables: TimeTable[],
-    currentWeek: number,
-    _onReminded?: (_key: string) => void,
-    remindedCourses: Record<string, number> = {},
-    debugLogging: boolean = false
-  ): void {
-    if (isRunning.value) {
-      return;
-    }
-
-    // 立即执行一次检查
-    void checkAndNotify(courses, timeTables, currentWeek, remindedCourses, _onReminded, debugLogging);
-
-    // 设置定时器，每30秒检查一次
-    reminderTimer.value = window.setInterval(() => {
-      void checkAndNotify(courses, timeTables, currentWeek, remindedCourses, _onReminded, debugLogging);
-    }, 30000);
-
-    isRunning.value = true;
-    console.log('[提醒服务] 已启动');
+  function stopReminderService(): Promise<void> {
+    return queueUpdate(async () => { await cancelCourseReminders(); });
   }
 
-  // 停止提醒服务
-  function stopReminderService(): void {
-    if (reminderTimer.value !== null) {
-      clearInterval(reminderTimer.value);
-      reminderTimer.value = null;
-    }
-    isRunning.value = false;
-    console.log('[提醒服务] 已停止');
-  }
-
-  // 测试通知
   async function testNotification(): Promise<void> {
     try {
-      const permissionGranted = await isPermissionGranted();
-      if (!permissionGranted) {
-        const permission = await requestPermission();
-        if (permission !== 'granted') {
-          ElMessage.warning('通知权限未授予，请到系统设置中开启通知权限。');
-          return;
-        }
-      }
-
-      await sendNotification({
-        title: '上课提醒 - 测试',
-        body: '课程: 测试课程\n地点: 沙河校区主教101\n时间: 08:00 - 09:35'
-      });
+      if (!await prepareNotifications()) return;
+      await notify({ id: 999_999, title: '上课提醒 - 测试',
+        body: '课程: 测试课程\n地点: 沙河校区主教101\n时间: 08:00 - 09:35' });
       ElMessage.success('测试通知已发送！请检查系统通知。');
     } catch (error) {
       console.error('发送通知失败:', error);
-      ElMessage.error('发送通知失败: ' + (error as Error).message);
+      ElMessage.error(`发送通知失败: ${String(error)}`);
     }
   }
 
-  // 组件卸载时自动停止服务
   onUnmounted(() => {
-    stopReminderService();
+    ++revision;
+    clearTimer();
+    // Keep native alarms when the app/page closes.
   });
 
-  return {
-    isRunning,
-    startReminderService,
-    stopReminderService,
-    testNotification,
-    checkAndNotify
-  };
+  return { isRunning, startReminderService, stopReminderService, testNotification };
 }
