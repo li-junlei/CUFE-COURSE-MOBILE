@@ -291,10 +291,6 @@ pub fn load_cached_schedule(schedule_id: Option<String>) -> Result<Vec<Course>, 
 
     let cached = storage.load_schedule(&id)?;
 
-    if cached.is_expired() {
-        return Err("课表数据已过期，请刷新".to_string());
-    }
-
     Ok(cached.courses)
 }
 

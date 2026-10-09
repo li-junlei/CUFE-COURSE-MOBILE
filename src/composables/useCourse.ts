@@ -1,5 +1,6 @@
 import { ref, computed } from 'vue';
 import { invoke } from '@tauri-apps/api/core';
+import { ElMessage } from 'element-plus';
 import type { Course, ScheduleMetadata } from '../types';
 
 export function useCourse() {
@@ -15,8 +16,9 @@ export function useCourse() {
       courses.value = result;
       return true;
     } catch (e) {
-      // 记录失败原因，便于通过日志区分"过期 / 无选中 / 文件丢失"等情形
+      // 剩余失败模式：课表文件丢失 / JSON 损坏 / 无选中课表，统一告知用户而非静默空白
       console.warn('loadCachedSchedule 失败:', e);
+      ElMessage.warning(`课表加载失败：${e}`);
       return false;
     }
   }

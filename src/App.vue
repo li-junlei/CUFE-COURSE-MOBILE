@@ -696,10 +696,8 @@ import { ElMessage, ElConfigProvider } from 'element-plus';
 import zhCn from 'element-plus/es/locale/lang/zh-cn';
 import { MoreFilled, ArrowDown, Loading, Plus, Picture, Delete, Close, Calendar, Collection, Upload, Timer, User, Location, Edit, Check, Grid, View, Refresh, DocumentChecked, Download, FolderOpened, Scissor, MagicStick } from '@element-plus/icons-vue';
 import { invoke } from '@tauri-apps/api/core';
-import { localDataDir } from '@tauri-apps/api/path';
 import { save as saveDialog } from '@tauri-apps/plugin-dialog';
 import { openUrl } from '@tauri-apps/plugin-opener';
-import { readFile } from '@tauri-apps/plugin-fs';
 import VueDraggable from 'vuedraggable';
 import { useCourse } from './composables/useCourse';
 import { useSchedule } from './composables/useSchedule';
@@ -1037,10 +1035,11 @@ async function handleSwitchSchedule(scheduleId: string) {
   if (isSorting.value) return; // 排序模式下禁止切换
   try {
     await switchScheduleFn(scheduleId);
-    await loadCachedSchedule(scheduleId);
+    const ok = await loadCachedSchedule(scheduleId);
     currentScheduleId.value = scheduleId;
     showScheduleManageDialog.value = false;
-    ElMessage.success('切换成功');
+    // 回读失败时原因已由 useCourse 弹 warning，此处不再叠加假"切换成功"
+    if (ok) ElMessage.success('切换成功');
     await loadConfig();
 
   } catch (e) {
@@ -1207,10 +1206,10 @@ async function handleImportExams(schedule: ScheduleMetadata) {
 
 // ===== 背景图裁剪与透明度/模糊度 =====
 
-/** 背景上传结果（Rust BackgroundUploadResult） */
+/** 背景上传结果（Rust BackgroundUploadResult，均为 backgrounds 目录下纯文件名） */
 interface BackgroundUploadResult {
-  imagePath: string;
-  originalPath: string | null;
+  fileName: string;
+  originalFileName: string | null;
 }
 
 /** 裁剪会话：source 为原图字节（新选图或重裁读出） */
@@ -1268,17 +1267,11 @@ function isAnimatedImage(bytes: Uint8Array, mime = ''): boolean {
   return false;
 }
 
-/** 读取背景文件（绝对路径优先，纯文件名回退 backgrounds 目录） */
-async function readBackgroundFile(pathOrName: string): Promise<Uint8Array> {
-  try {
-    return await readFile(pathOrName);
-  } catch {
-    if (!pathOrName.includes('/') && !pathOrName.includes('\\')) {
-      const fallbackPath = `${await localDataDir()}cufe-course/backgrounds/${pathOrName}`;
-      return await readFile(fallbackPath);
-    }
-    throw new Error('读取背景文件失败');
-  }
+/** 从 Rust 端读取背景文件（写读同源，绕开 fs 插件在 Android 上的路径/scope 不一致问题） */
+async function loadBackgroundBytes(kind: 'display' | 'original'): Promise<{ bytes: Uint8Array; ext: string }> {
+  const res = await invoke<{ dataBase64: string; ext: string }>('read_background_file', { kind });
+  const bin = atob(res.dataBase64);
+  return { bytes: Uint8Array.from(bin, c => c.charCodeAt(0)), ext: res.ext || 'jpg' };
 }
 
 function extToMime(ext: string): string {
@@ -1309,8 +1302,8 @@ function closeCropper() {
 
 /** 更新背景为上传结果并持久化（save 必须在 upload 之后，整对象回写） */
 async function applyBackground(res: BackgroundUploadResult, opacity: number, blur: number, dataUrl: string) {
-  config.value.background_image = res.imagePath;
-  config.value.background_original = res.originalPath ?? undefined;
+  config.value.background_image = res.fileName;
+  config.value.background_original = res.originalFileName ?? undefined;
   config.value.background_opacity = opacity;
   config.value.background_blur = blur;
   await invoke('save_app_config', { config: config.value });
@@ -1331,11 +1324,12 @@ async function handleUploadBackground() {
     const ext = (file.name.split('.').pop() || 'jpg').toLowerCase();
 
     if (isAnimatedImage(bytes, file.type)) {
-      // 动图经 canvas 裁剪会丢动画，直接保存原图
+      // 动图经 canvas 裁剪会丢动画，直接保存原图（保留真实扩展名，重启后才能正确推断 mime）
       const res = await invoke<BackgroundUploadResult>('upload_background_image', {
         bytes: Array.from(bytes),
         originalBytes: null,
         originalExt: null,
+        displayExt: ext,
       });
       await applyBackground(res, config.value.background_opacity ?? 100, config.value.background_blur ?? 0,
         await bytesToDataUrl(bytes, file.type || 'image/gif'));
@@ -1349,20 +1343,18 @@ async function handleUploadBackground() {
   }
 }
 
-// 重新裁剪当前背景（无原图记录时现有图即原图）
+// 重新裁剪当前背景（无原图记录时 Rust 端回退现有图）
 async function handleRecropBackground() {
   if (!backgroundImage.value) return;
   showPopup.value = false;
 
-  const target = config.value.background_original || config.value.background_image!;
   try {
-    const bytes = await readBackgroundFile(target);
+    const { bytes, ext } = await loadBackgroundBytes('original');
     if (isAnimatedImage(bytes)) {
       ElMessage.warning('动态图片背景不支持重新裁剪');
       return;
     }
-    const ext = (target.split('.').pop() || 'jpg').toLowerCase();
-    openCropper(URL.createObjectURL(new Blob([bytes])), bytes, ext);
+    openCropper(URL.createObjectURL(new Blob([bytes], { type: extToMime(ext) })), bytes, ext);
   } catch (e) {
     console.error('读取原图失败:', e);
     ElMessage.error(`读取原图失败: ${e}`);
@@ -1572,13 +1564,11 @@ async function loadConfig() {
     reminderEnabled.value = config.value.reminder_enabled ?? false;
     reminderDebugLogging.value = config.value.reminder_debug_logging ?? false;
 
-    // 加载背景图
+    // 加载背景图（经 Rust 读取，失败静默降级为无背景）
     if (config.value.background_image) {
       try {
-        const imagePath = config.value.background_image;
-        const fileData = await readBackgroundFile(imagePath);
-        const ext = imagePath.split('.').pop()?.toLowerCase() || 'png';
-        backgroundImage.value = await bytesToDataUrl(fileData, extToMime(ext));
+        const { bytes, ext } = await loadBackgroundBytes('display');
+        backgroundImage.value = await bytesToDataUrl(bytes, extToMime(ext));
       } catch (e) {
         console.error('加载背景图失败:', e);
       }
@@ -1632,7 +1622,7 @@ async function initializeApp() {
   // 5. 先设前端态，让 activeSchedule computed 立即生效
   currentScheduleId.value = targetId;
 
-  // 6. 加载课表数据（失败保留 UI 态，仅 warn；用户可在管理列表手动更新）
+  // 6. 加载课表数据（失败保留 UI 态；原因提示已由 useCourse 弹出，用户可在管理列表手动更新）
   const ok = await loadCachedSchedule(targetId);
   if (!ok) {
     console.warn('loadCachedSchedule 失败，UI 显示空课表但保留当前使用标识');

@@ -236,6 +236,7 @@ pub struct CachedSchedule {
     pub name: String,            // 课表名称
     pub courses: Vec<Course>,
     pub timestamp: i64,
+    // 遗留字段：30 天过期拦截已移除，仅为旧数据文件反序列化兼容保留
     pub expire_time: i64,
     pub first_day: Option<i64>,  // 第一周第一天的时间戳
     pub max_periods: Option<i32>, // 最大节次
@@ -244,14 +245,6 @@ pub struct CachedSchedule {
     pub sort_index: Option<i32>, // 排序索引
     pub school_year: Option<i32>,   // 学年
     pub school_term: Option<i32>,   // 学期
-}
-
-impl CachedSchedule {
-    /// 检查缓存是否过期（30天）
-    pub fn is_expired(&self) -> bool {
-        let now = chrono::Utc::now().timestamp();
-        now > self.expire_time
-    }
 }
 
 /// ============================================================

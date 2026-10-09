@@ -85,6 +85,7 @@ pub fn run() {
             background::save_background_image,
             background::delete_background_image,
             background::upload_background_image,
+            background::read_background_file,
             // 更新命令
             update::check_update,
             // 学期时间表命令

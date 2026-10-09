@@ -94,10 +94,13 @@ impl StorageManager {
         let content = serde_json::to_string_pretty(config)
             .map_err(|e| format!("序列化配置失败: {}", e))?;
 
-        let mut file = fs::File::create(&path)
-            .map_err(|e| format!("创建配置文件失败: {}", e))?;
-        file.write_all(content.as_bytes())
-            .map_err(|e| format!("写入配置文件失败: {}", e))?;
+        // 原子写：先写同目录临时文件再 rename，避免进程被杀（SIGKILL）时 config.json 被截断损坏
+        let tmp_path = path.with_extension("json.tmp");
+        fs::File::create(&tmp_path)
+            .and_then(|mut f| f.write_all(content.as_bytes()))
+            .map_err(|e| format!("写入临时配置文件失败: {}", e))?;
+        fs::rename(&tmp_path, &path)
+            .map_err(|e| format!("替换配置文件失败: {}", e))?;
 
         Ok(())
     }
@@ -286,19 +289,6 @@ impl StorageManager {
             .map_err(|e| format!("创建学期时间表文件失败: {}", e))?;
         file.write_all(content.as_bytes())
             .map_err(|e| format!("写入学期时间表失败: {}", e))?;
-
-        Ok(())
-    }
-
-    /// 删除背景图
-    pub fn delete_background(&self, filename: &str) -> Result<(), String> {
-        let path = self.background_dir().join(filename);
-        if !path.exists() {
-            return Ok(());
-        }
-
-        fs::remove_file(&path)
-            .map_err(|e| format!("删除背景图失败: {}", e))?;
 
         Ok(())
     }

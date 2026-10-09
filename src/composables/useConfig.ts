@@ -33,48 +33,6 @@ export async function saveAppConfig(newConfig: AppConfig): Promise<void> {
 }
 
 /**
- * 保存背景图
- */
-export async function saveBackgroundImage(): Promise<string | null> {
-  return new Promise((resolve) => {
-    const input = document.createElement('input');
-    input.type = 'file';
-    input.accept = 'image/jpeg, image/png, image/webp';
-    input.onchange = async (event: any) => {
-      const file = event.target.files?.[0];
-      if (!file) {
-        resolve(null);
-        return;
-      }
-
-      try {
-        const buffer = await file.arrayBuffer();
-        const bytes = Array.from(new Uint8Array(buffer));
-        const result = await invoke<{ imagePath: string; originalPath: string | null }>('upload_background_image', {
-          bytes,
-          originalBytes: null,
-          originalExt: null,
-        });
-        backgroundImage.value = result.imagePath;
-        resolve(result.imagePath);
-      } catch (error) {
-        console.error('上传背景图失败:', error);
-        resolve(null);
-      }
-    };
-    input.click();
-  });
-}
-
-/**
- * 删除背景图
- */
-export async function deleteBackgroundImage(): Promise<void> {
-  await invoke('delete_background_image');
-  backgroundImage.value = '';
-}
-
-/**
  * 切换网格辅助线显示
  */
 export async function toggleGridLines(show: boolean): Promise<void> {
@@ -160,8 +118,6 @@ export function useConfig() {
     loading,
     loadAppConfig,
     saveAppConfig,
-    saveBackgroundImage,
-    deleteBackgroundImage,
     toggleGridLines,
     toggleTeacher,
     toggleLocation,

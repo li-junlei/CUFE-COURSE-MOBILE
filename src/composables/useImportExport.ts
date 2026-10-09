@@ -89,45 +89,6 @@ export async function importExams(scheduleId: string): Promise<any[]> {
   return await invoke('fetch_and_import_exams', { scheduleId });
 }
 
-/**
- * 上传背景图
- */
-export async function uploadBackground(): Promise<string | null> {
-  return new Promise((resolve) => {
-    const input = document.createElement('input');
-    input.type = 'file';
-    input.accept = 'image/jpeg, image/png, image/webp';
-    input.onchange = async (event: any) => {
-      const file = event.target.files?.[0];
-      if (!file) {
-        resolve(null);
-        return;
-      }
-      try {
-        const buffer = await file.arrayBuffer();
-        const bytes = Array.from(new Uint8Array(buffer));
-        const result = await invoke<{ imagePath: string; originalPath: string | null }>('upload_background_image', {
-          bytes,
-          originalBytes: null,
-          originalExt: null,
-        });
-        resolve(result.imagePath);
-      } catch (error) {
-        console.error('上传背景图失败:', error);
-        resolve(null);
-      }
-    };
-    input.click();
-  });
-}
-
-/**
- * 删除背景图
- */
-export async function deleteBackground(): Promise<void> {
-  await invoke('delete_background_image');
-}
-
 export function useImportExport() {
   return {
     exportSchedule,
@@ -136,7 +97,5 @@ export function useImportExport() {
     updateSchedule,
     refreshSchedule,
     importExams,
-    uploadBackground,
-    deleteBackground,
   };
 }
